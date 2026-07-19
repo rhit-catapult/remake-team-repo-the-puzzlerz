@@ -6,7 +6,7 @@ from sudoku_gen import SudokuGen
 class SudokuPopup:
     def __init__(self, root):
         self.root = root
-        self.root.title("Sudoku Puzzle")
+        self.root.title("Sudoku")
         self.root.state('zoomed')  # Maximize window
         self.root.configure(bg='white')
 
@@ -29,13 +29,32 @@ class SudokuPopup:
         self.clue_color = '#fffacd'
         self.border_color = 'black'
 
+        # Register validation command
+        self.validate_cmd = (self.root.register(self.validate_digit), '%P', '%d')
+
         # Create UI
         self.create_ui()
+
+    def validate_digit(self, value, action):
+        """Validate that only single digits 1-9 are entered"""
+        # action 1 = insert, 0 = delete
+        if action == '0':  # Allow deletion
+            return True
+
+        # Allow empty string
+        if value == '':
+            return True
+
+        # Only allow single digit 1-9
+        if len(value) == 1 and value.isdigit() and '1' <= value <= '9':
+            return True
+
+        return False
 
     def create_ui(self):
         """Create the popup UI"""
         # Title
-        title_label = tk.Label(self.root, text="Sudoku Puzzle",
+        title_label = tk.Label(self.root, text="Sudoku",
                                font=self.title_font, bg='white', fg='black')
         title_label.pack(pady=20)
 
@@ -84,7 +103,9 @@ class SudokuPopup:
                     bg=cell_bg,
                     fg='black',
                     relief='solid',
-                    borderwidth=0
+                    borderwidth=0,
+                    validate='key',
+                    validatecommand=self.validate_cmd
                 )
 
                 # Place entry with padding simulating borders
@@ -206,24 +227,22 @@ class SudokuPopup:
                 if value != 0:
                     entry.insert(0, str(value))
 
-                # Lock clue cells
+                # Unbind all previous event handlers
+                entry.unbind('<KeyRelease>')
+
+                # Lock clue cells and rebind empty cells
                 if is_clue:
                     entry.config(state='readonly')
+                else:
+                    entry.bind('<KeyRelease>', lambda e, r=row, c=col: self.on_cell_change(r, c, e))
 
     def on_cell_change(self, row, col, event):
-        """Handle cell input changes"""
+        """Handle cell input changes and update user grid"""
         entry = self.cell_entries[(row, col)]
         value = entry.get().strip()
 
-        # Only allow digits 1-9 or empty
+        # Update user grid
         if value:
-            if not value.isdigit() or int(value) < 1 or int(value) > 9:
-                entry.delete(0, tk.END)
-                return
-            if len(value) > 1:
-                entry.delete(0, tk.END)
-                entry.insert(0, value[0])
-                return
             self.user_grid[row][col] = int(value)
         else:
             self.user_grid[row][col] = 0
@@ -251,7 +270,7 @@ class SudokuPopup:
         if self.is_valid_solution():
             messagebox.showinfo("Success!", "Congratulations! You solved it correctly!")
         else:
-            messagebox.showerror("Incorrect", "The solution is not correct. Please try again.")
+            messagebox.showerror("Error", "There is an error in the puzzle. Please try again.")
 
     def is_valid_solution(self):
         """Validate the current solution"""
