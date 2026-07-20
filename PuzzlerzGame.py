@@ -112,6 +112,12 @@ while running:
                             subprocess.Popen([sys.executable, sudoku_path])
                         except Exception as e:
                             messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
+                    elif t == "Crossword":
+                        try:
+                            crossword_path = os.path.join(os.path.dirname(__file__), 'Crossword.py')
+                            subprocess.Popen([sys.executable, crossword_path])
+                        except Exception as e:
+                            messagebox.showerror("Crossword Error", f"Cannot open Crossword: {e}")
                     elif t == "Word Search":
                         try:
                             word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
