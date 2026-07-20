@@ -1,0 +1,157 @@
+import os
+import pygame
+import tkinter as tk
+from tkinter import font, messagebox, simpledialog
+from sudoku_gen import SudokuGen
+
+try:
+    from PuzzlerzGame import SudokuPopup
+except Exception as e:
+    SudokuPopup = None
+    print(f"Warning: could not import SudokuPopup: {e}")
+
+pygame.init()
+# Try to load a jigsaw outline image (place your image at project root or in assets/)
+jigsaw_image = None
+_jigsaw_paths = (
+    "jigsaw_outline.png",
+    os.path.join("assets", "jigsaw_outline.png"),
+    os.path.join("samples", "jigsaw_outline.png"),
+    os.path.join("samples", "sample_posters", "jigsaw_outline.png"),
+)
+for _p in _jigsaw_paths:
+    if os.path.exists(_p):
+        try:
+            jigsaw_image = pygame.image.load(_p).convert_alpha()
+            break
+        except Exception:
+            jigsaw_image = None
+screen = pygame.display.set_mode((800, 600))
+pygame.display.set_caption("Puzzlerz Game")
+clock = pygame.time.Clock()
+title_font = pygame.font.SysFont(None, 72)
+button_font = pygame.font.SysFont(None, 40)
+
+
+def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
+    width, height = 160, 112
+
+    body = pygame.Rect(x, y - height, width, height)
+    shadow = body.move(6, 6)
+    pygame.draw.rect(surface, (200, 210, 230), shadow, border_radius=24)
+
+    # If a jigsaw outline image is available, use it (image should include transparent background)
+    if jigsaw_image:
+        pygame.draw.rect(surface, color, body, border_radius=20)
+        img = pygame.transform.smoothscale(jigsaw_image, (width, height))
+        if flip:
+            img = pygame.transform.flip(img, True, False)
+        surface.blit(img, (x, y - height))
+        pygame.draw.rect(surface, outline_color, body, width=2, border_radius=20)
+        return
+
+    # Fallback: draw a stylized piece using primitives
+    tab_radius = 24
+    bg_color = (245, 248, 255)
+
+    pygame.draw.rect(surface, color, body, border_radius=20)
+
+    edge_centers = {
+        "top": (x + width // 2, y - height),
+        "bottom": (x + width // 2, y),
+        "left": (x, y - height // 2),
+        "right": (x + width, y - height // 2),
+    }
+
+    def draw_tab(edge):
+        connector_center = edge_centers[edge]
+        pygame.draw.circle(surface, color, connector_center, tab_radius)
+        pygame.draw.circle(surface, outline_color, connector_center, tab_radius, width=5)
+
+    def draw_socket(edge):
+        if edge == "top":
+            socket_center = (edge_centers[edge][0], edge_centers[edge][1] + tab_radius // 2)
+        elif edge == "bottom":
+            socket_center = (edge_centers[edge][0], edge_centers[edge][1] - tab_radius // 2)
+        elif edge == "left":
+            socket_center = (edge_centers[edge][0] + tab_radius // 2, edge_centers[edge][1])
+        else:
+            socket_center = (edge_centers[edge][0] - tab_radius // 2, edge_centers[edge][1])
+        pygame.draw.circle(surface, bg_color, socket_center, tab_radius)
+        pygame.draw.circle(surface, outline_color, socket_center, tab_radius, width=5)
+        pygame.draw.circle(surface, bg_color, socket_center, max(tab_radius - 10, 1))
+
+    if not flip:
+        tab_edges = ["top", "right"]
+        socket_edges = ["left", "bottom"]
+    else:
+        tab_edges = ["top", "left"]
+        socket_edges = ["right", "bottom"]
+
+    for edge in tab_edges:
+        draw_tab(edge)
+    for edge in socket_edges:
+        draw_socket(edge)
+
+    pygame.draw.rect(surface, outline_color, body, width=5, border_radius=20)
+    pygame.draw.line(surface, (255, 255, 255), (x + 18, y - height + 22), (x + width - 18, y - height + 22), 4)
+    pygame.draw.line(surface, (255, 255, 255), (x + 20, y - height + 44), (x + width - 20, y - height + 44), 2)
+
+
+running = True
+while running:
+    button_texts = ["Sudoku", "Crossword", "Word Search"]
+    button_width = 320
+    button_height = 60
+    button_spacing = 18
+    button_x = (screen.get_width() - button_width) // 2
+    button_y = 115
+    button_color = (220, 230, 250)
+    button_border = (70, 80, 150)
+
+    # Create button rects before handling events so clicks map correctly
+    button_rects = []
+    temp_y = button_y
+    for text in button_texts:
+        button_rects.append((text, pygame.Rect(button_x, temp_y, button_width, button_height)))
+        temp_y += button_height + button_spacing
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            # detect which button was clicked
+            for t, rect in button_rects:
+                if rect.collidepoint((mx, my)):
+                    if t == "Sudoku":
+                        if SudokuPopup:
+                            root = tk.Tk()
+                            app = SudokuPopup(root)
+                            root.mainloop()
+                        else:
+                            print("SudokuPopup not available (import failed)")
+                    else:
+                        print(f"Clicked {t}")
+
+    screen.fill((245, 248, 255))
+
+    title_surface = title_font.render("Puzzlr", True, (40, 40, 100))
+    title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 50))
+    screen.blit(title_surface, title_rect)
+
+    # Draw buttons and labels
+    for text, button_rect in button_rects:
+        pygame.draw.rect(screen, button_color, button_rect, border_radius=18)
+        pygame.draw.rect(screen, button_border, button_rect, width=4, border_radius=18)
+        label_surface = button_font.render(text, True, (30, 30, 80))
+        label_rect = label_surface.get_rect(center=button_rect.center)
+        screen.blit(label_surface, label_rect)
+
+    draw_puzzle_piece(screen, 14, screen.get_height() - 16, (72, 144, 240), (30, 70, 140), flip=False)
+    draw_puzzle_piece(screen, screen.get_width() - 174, screen.get_height() - 16, (140, 80, 220), (80, 40, 140), flip=True)
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
