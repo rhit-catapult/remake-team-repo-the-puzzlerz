@@ -25,7 +25,7 @@ WORD_GENRES = {
 
 
 class WordSearchMenu:
-    def __init__(self, root):
+    def __init__(self, root, initial_genre='Programming', initial_size='12'):
         self.root = root
         self.root.title("Word Search - Game Setup")
         self.root.state('zoomed')  # Maximize window
@@ -46,7 +46,7 @@ class WordSearchMenu:
         genre_frame = tk.Frame(self.root, bg='white')
         genre_frame.pack(expand=True)
 
-        self.genre_var = tk.StringVar(value='Programming')
+        self.genre_var = tk.StringVar(value=initial_genre)
         for genre in WORD_GENRES.keys():
             rb = tk.Radiobutton(genre_frame, text=genre, variable=self.genre_var, value=genre,
                                 font=font.Font(family="Arial", size=11), bg='white')
@@ -61,7 +61,7 @@ class WordSearchMenu:
         size_frame = tk.Frame(self.root, bg='white')
         size_frame.pack(expand=True)
 
-        self.size_var = tk.StringVar(value='12')
+        self.size_var = tk.StringVar(value=initial_size)
         sizes = ['10', '12', '15', '18']
         for size in sizes:
             rb = tk.Radiobutton(size_frame, text=f"{size}x{size}", variable=self.size_var, value=size,
@@ -82,16 +82,19 @@ class WordSearchMenu:
 
         # Open word search game
         game_root = tk.Tk()
-        app = WordSearch(game_root, WORD_GENRES[genre], size)
+        app = WordSearch(game_root, WORD_GENRES[genre], size, genre=genre, size=size)
         game_root.mainloop()
 
 
 class WordSearch:
-    def __init__(self, root, words, grid_size):
+    def __init__(self, root, words, grid_size, genre=None, size=None):
         self.root = root
         self.root.title("Word Search")
         self.root.state('zoomed')  # Maximize window
         self.root.configure(bg='white')
+
+        self.selected_genre = genre if genre is not None else 'Programming'
+        self.selected_size = str(size if size is not None else grid_size)
 
         # Game state
         self.words = words[:min(len(words), 10 + (grid_size // 3))]  # Scale words to grid size (minimum 10)
@@ -202,10 +205,23 @@ class WordSearch:
 
     def create_ui(self):
         """Create the UI"""
-        # Title
-        title_label = tk.Label(self.root, text="Word Search",
+        # Title and close button
+        title_frame = tk.Frame(self.root, bg='white')
+        title_frame.pack(fill=tk.X, pady=10)
+
+        title_label = tk.Label(title_frame, text="Word Search",
                                font=self.title_font, bg='white', fg='black')
-        title_label.pack(pady=10)
+        title_label.pack(side=tk.LEFT, expand=True)
+
+        new_selection_btn = tk.Button(title_frame, text="New Selection", font=font.Font(family="Arial", size=12, weight="bold"),
+                                      bg='#5bc0de', fg='white', padx=12, pady=6,
+                                      command=self.open_menu)
+        new_selection_btn.pack(side=tk.RIGHT, padx=5)
+
+        close_btn = tk.Button(title_frame, text="Close", font=font.Font(family="Arial", size=12, weight="bold"),
+                              bg='#d9534f', fg='white', padx=12, pady=6,
+                              command=self.close_window)
+        close_btn.pack(side=tk.RIGHT, padx=10)
 
         # Main container
         container = tk.Frame(self.root, bg='white')
@@ -267,6 +283,16 @@ class WordSearch:
 
         self.word_frame.update_idletasks()
         self.word_canvas.config(scrollregion=self.word_canvas.bbox('all'))
+
+    def close_window(self):
+        """Close the current word search window."""
+        self.root.destroy()
+
+    def open_menu(self):
+        """Return to the word search menu with the current topic and size selected."""
+        self.root.destroy()
+        menu_root = tk.Tk()
+        WordSearchMenu(menu_root, initial_genre=self.selected_genre, initial_size=self.selected_size)
 
     def draw_grid(self):
         """Draw the word search grid"""
