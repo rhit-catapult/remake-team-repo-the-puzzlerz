@@ -30,68 +30,52 @@ button_font = pygame.font.SysFont(None, 40)
 
 
 def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
-    width, height = 160, 112
-
+    width, height = 172, 112
     body = pygame.Rect(x, y - height, width, height)
     shadow = body.move(6, 6)
-    pygame.draw.rect(surface, (200, 210, 230), shadow, border_radius=24)
+    pygame.draw.rect(surface, (206, 216, 232), shadow, border_radius=26)
 
     # If a jigsaw outline image is available, use it (image should include transparent background)
     if jigsaw_image:
-        pygame.draw.rect(surface, color, body, border_radius=20)
+        pygame.draw.rect(surface, color, body, border_radius=22)
         img = pygame.transform.smoothscale(jigsaw_image, (width, height))
         if flip:
             img = pygame.transform.flip(img, True, False)
         surface.blit(img, (x, y - height))
-        pygame.draw.rect(surface, outline_color, body, width=2, border_radius=20)
+        pygame.draw.rect(surface, outline_color, body, width=2, border_radius=22)
         return
 
-    # Fallback: draw a stylized piece using primitives
-    tab_radius = 24
-    bg_color = (245, 248, 255)
+    # Fallback: draw a more literal jigsaw piece with a protruding tab and a square-edged socket.
+    bg_color = (255, 255, 255)
+    tab_w = 42
+    tab_h = 28
 
-    pygame.draw.rect(surface, color, body, border_radius=20)
+    pygame.draw.rect(surface, color, body, border_radius=22)
 
-    edge_centers = {
-        "top": (x + width // 2, y - height),
-        "bottom": (x + width // 2, y),
-        "left": (x, y - height // 2),
-        "right": (x + width, y - height // 2),
-    }
+    # Draw the outer border only on the shaded region around the edge of the piece.
+    pygame.draw.rect(surface, outline_color, (x + 2, y - height + 2, width - 4, height - 4), width=3, border_radius=18)
 
-    def draw_tab(edge):
-        connector_center = edge_centers[edge]
-        pygame.draw.circle(surface, color, connector_center, tab_radius)
-        pygame.draw.circle(surface, outline_color, connector_center, tab_radius, width=5)
+    # Top tab
+    pygame.draw.rect(surface, color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h))
+    pygame.draw.rect(surface, outline_color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h), width=3)
 
-    def draw_socket(edge):
-        if edge == "top":
-            socket_center = (edge_centers[edge][0], edge_centers[edge][1] + tab_radius // 2)
-        elif edge == "bottom":
-            socket_center = (edge_centers[edge][0], edge_centers[edge][1] - tab_radius // 2)
-        elif edge == "left":
-            socket_center = (edge_centers[edge][0] + tab_radius // 2, edge_centers[edge][1])
-        else:
-            socket_center = (edge_centers[edge][0] - tab_radius // 2, edge_centers[edge][1])
-        pygame.draw.circle(surface, bg_color, socket_center, tab_radius)
-        pygame.draw.circle(surface, outline_color, socket_center, tab_radius, width=5)
-        pygame.draw.circle(surface, bg_color, socket_center, max(tab_radius - 10, 1))
+    # Right tab
+    pygame.draw.rect(surface, color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w))
+    pygame.draw.rect(surface, outline_color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w), width=3)
 
-    if not flip:
-        tab_edges = ["top", "right"]
-        socket_edges = ["left", "bottom"]
-    else:
-        tab_edges = ["top", "left"]
-        socket_edges = ["right", "bottom"]
+    # Left socket (blends into the background)
+    pygame.draw.rect(surface, bg_color, (x - 8, y - height // 2 - 16, 20, 32))
+    pygame.draw.line(surface, (255, 255, 255), (x - 8, y - height // 2 - 16), (x - 8, y - height // 2 + 16), 3)
+    pygame.draw.line(surface, (255, 255, 255), (x + 12, y - height // 2 - 16), (x + 12, y - height // 2 + 16), 3)
 
-    for edge in tab_edges:
-        draw_tab(edge)
-    for edge in socket_edges:
-        draw_socket(edge)
+    # Bottom socket (blends into the background)
+    pygame.draw.rect(surface, bg_color, (x + width // 2 - 16, y - 8, 32, 20))
+    pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y - 8), (x + width // 2 + 16, y - 8), 3)
+    pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y + 12), (x + width // 2 + 16, y + 12), 3)
 
-    pygame.draw.rect(surface, outline_color, body, width=5, border_radius=20)
-    pygame.draw.line(surface, (255, 255, 255), (x + 18, y - height + 22), (x + width - 18, y - height + 22), 4)
-    pygame.draw.line(surface, (255, 255, 255), (x + 20, y - height + 44), (x + width - 20, y - height + 44), 2)
+    # Add a small highlight line to suggest a puzzle edge.
+    pygame.draw.line(surface, (255, 255, 255), (x + 16, y - height + 18), (x + width - 16, y - height + 18), 3)
+    pygame.draw.line(surface, (255, 255, 255), (x + 18, y - height + 38), (x + width - 18, y - height + 38), 2)
 
 
 running = True
@@ -128,6 +112,12 @@ while running:
                             subprocess.Popen([sys.executable, sudoku_path])
                         except Exception as e:
                             messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
+                    elif t == "Crossword":
+                        try:
+                            crossword_path = os.path.join(os.path.dirname(__file__), 'Crossword.py')
+                            subprocess.Popen([sys.executable, crossword_path])
+                        except Exception as e:
+                            messagebox.showerror("Crossword Error", f"Cannot open Crossword: {e}")
                     elif t == "Word Search":
                         try:
                             word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
@@ -151,8 +141,8 @@ while running:
         label_rect = label_surface.get_rect(center=button_rect.center)
         screen.blit(label_surface, label_rect)
 
-    draw_puzzle_piece(screen, 14, screen.get_height() - 16, (72, 144, 240), (30, 70, 140), flip=False)
-    draw_puzzle_piece(screen, screen.get_width() - 174, screen.get_height() - 16, (140, 80, 220), (80, 40, 140), flip=True)
+    draw_puzzle_piece(screen, 8, screen.get_height() - 12, (72, 144, 240), (30, 70, 140), flip=False)
+    draw_puzzle_piece(screen, screen.get_width() - 186, screen.get_height() - 12, (140, 80, 220), (80, 40, 140), flip=True)
 
     pygame.display.flip()
     clock.tick(60)
