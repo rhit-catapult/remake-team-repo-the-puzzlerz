@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 import os
 import pygame
 
@@ -101,7 +101,7 @@ while running:
     clock.tick(60)
 
 pygame.quit()
-=======
+
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
@@ -407,4 +407,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = SudokuPopup(root)
     root.mainloop()
->>>>>>> 876e0433ecdc26dda3307029fd120c95acf6c58b
+
