@@ -128,6 +128,12 @@ while running:
                             subprocess.Popen([sys.executable, sudoku_path])
                         except Exception as e:
                             messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
+                    elif t == "Word Search":
+                        try:
+                            word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
+                            subprocess.Popen([sys.executable, word_search_path])
+                        except Exception as e:
+                            messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
 
     screen.fill((255, 255, 255))
 
