@@ -12,7 +12,7 @@ title_font = pygame.font.SysFont(None, 72)
 button_font = pygame.font.SysFont(None, 40)
 
 # Try to load a jigsaw outline image (place your image at project root or in assets/)
-jigsaw_image = puzzlerz_jigsaw_image = None
+jigsaw_image = None
 _jigsaw_paths = (
     "jigsaw_outline.png",
     os.path.join("assets", "jigsaw_outline.png"),
