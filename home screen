@@ -3,10 +3,10 @@ import pygame
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
+import subprocess
+import sys
 
 pygame.init()
-SudokuPopup = None
-SudokuImportError = None
 # Try to load a jigsaw outline image (place your image at project root or in assets/)
 jigsaw_image = None
 _jigsaw_paths = (
@@ -122,18 +122,12 @@ while running:
             for t, rect in button_rects:
                 if rect.collidepoint((mx, my)):
                     if t == "Sudoku":
-                        if SudokuPopup is None and SudokuImportError is None:
-                            try:
-                                from PuzzlerzGame import SudokuPopup as _PuzzlePopup
-                                SudokuPopup = _PuzzlePopup
-                            except Exception as e:
-                                SudokuImportError = e
-                        if SudokuPopup:
-                            root = tk.Tk()
-                            app = SudokuPopup(root)
-                            root.mainloop()
-                        else:
-                            messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {SudokuImportError}")
+                        # Launch Sudoku popup in a separate Python process to avoid mixing GUI loops
+                        try:
+                            sudoku_path = os.path.join(os.path.dirname(__file__), 'Sudoku.py')
+                            subprocess.Popen([sys.executable, sudoku_path])
+                        except Exception as e:
+                            messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
 
     screen.fill((255, 255, 255))
 
