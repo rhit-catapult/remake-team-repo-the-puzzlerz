@@ -102,8 +102,9 @@ while running:
     button_spacing = 18
     button_x = (screen.get_width() - button_width) // 2
     button_y = 115
-    button_color = (220, 230, 250)
-    button_border = (70, 80, 150)
+    button_color = (240, 246, 255)
+    button_border = (70, 90, 160)
+    button_text_color = (25, 35, 85)
 
     # Create button rects before handling events so clicks map correctly
     button_rects = []
@@ -133,22 +134,20 @@ while running:
                             root.mainloop()
                         else:
                             messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {SudokuImportError}")
-    # Draw buttons and labels
-    for text, button_rect in button_rects:
-        pygame.draw.rect(screen, button_color, button_rect, border_radius=18)
-        pygame.draw.rect(screen, button_border, button_rect, width=4, border_radius=18)
-        label_surface = button_font.render(text, True, (30, 30, 80))
-        label_rect = label_surface.get_rect(center=button_rect.center)
-        screen.fill((255, 255, 255))
+
+    screen.fill((255, 255, 255))
 
     title_surface = title_font.render("Puzzlr", True, (40, 40, 100))
     title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 50))
     screen.blit(title_surface, title_rect)
 
+    # Draw buttons and labels
     for text, button_rect in button_rects:
+        shadow_rect = button_rect.move(0, 6)
+        pygame.draw.rect(screen, (220, 225, 235), shadow_rect, border_radius=18)
         pygame.draw.rect(screen, button_color, button_rect, border_radius=18)
-        pygame.draw.rect(screen, button_border, button_rect, width=4, border_radius=18)
-        label_surface = button_font.render(text, True, (30, 30, 80))
+        pygame.draw.rect(screen, button_border, button_rect, width=3, border_radius=18)
+        label_surface = button_font.render(text, True, button_text_color)
         label_rect = label_surface.get_rect(center=button_rect.center)
         screen.blit(label_surface, label_rect)
 
