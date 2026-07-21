@@ -26,8 +26,8 @@ info = pygame.display.Info()
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 pygame.display.set_caption("Puzzlerz Game")
 clock = pygame.time.Clock()
-title_font = pygame.font.SysFont(None, 72)
-button_font = pygame.font.SysFont(None, 40)
+title_font = pygame.font.SysFont(None, 120)
+button_font = pygame.font.SysFont(None, 48)
 
 
 def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
@@ -82,16 +82,15 @@ def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
 running = True
 while running:
     button_texts = ["Sudoku", "Crossword", "Word Search"]
-    button_width = 320
-    button_height = 60
-    button_spacing = 18
+    button_width = 390
+    button_height = 78
+    button_spacing = 22
     button_x = (screen.get_width() - button_width) // 2
-    button_y = 115
+    button_y = max(180, (screen.get_height() // 2) - (((len(button_texts) * button_height) + ((len(button_texts) - 1) * button_spacing)) // 2) + 20)
     button_color = (240, 246, 255)
     button_border = (70, 90, 160)
     button_text_color = (25, 35, 85)
-    close_button_rect = pygame.Rect(screen.get_width() - 80, 20, 50, 50)
-    x_button_rect = pygame.Rect(20, 20, 50, 50)
+    x_button_rect = pygame.Rect(20, 20, 58, 58)
 
     # Create button rects before handling events so clicks map correctly
     button_rects = []
@@ -106,8 +105,6 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             if x_button_rect.collidepoint((mx, my)):
-                running = False
-            elif close_button_rect.collidepoint((mx, my)):
                 running = False
             else:
                 # detect which button was clicked
@@ -135,8 +132,8 @@ while running:
 
     screen.fill((255, 255, 255))
 
-    title_surface = title_font.render("Puzzlr", True, (40, 40, 100))
-    title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 50))
+    title_surface = title_font.render("Puzzlr", True, (0, 170, 170))
+    title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 95))
     screen.blit(title_surface, title_rect)
 
     pygame.draw.rect(screen, (220, 20, 20), x_button_rect, border_radius=16)
@@ -144,12 +141,6 @@ while running:
     x_surface = button_font.render("X", True, (255, 255, 255))
     x_rect = x_surface.get_rect(center=x_button_rect.center)
     screen.blit(x_surface, x_rect)
-
-    pygame.draw.rect(screen, (220, 20, 20), close_button_rect, border_radius=16)
-    pygame.draw.rect(screen, (255, 255, 255), close_button_rect, width=3, border_radius=16)
-    close_surface = button_font.render("Close", True, (255, 255, 255))
-    close_rect = close_surface.get_rect(center=close_button_rect.center)
-    screen.blit(close_surface, close_rect)
 
     # Draw buttons and labels
     for text, button_rect in button_rects:
