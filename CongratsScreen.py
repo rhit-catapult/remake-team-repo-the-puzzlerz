@@ -1,5 +1,7 @@
 import os
 import random
+import subprocess
+import sys
 import pygame
 
 
@@ -49,6 +51,11 @@ def main():
                     running = False
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if close_button.collidepoint(event.pos):
+                    try:
+                        launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+                        subprocess.Popen([sys.executable, launcher_path])
+                    except Exception:
+                        pass
                     running = False
 
         screen.fill(background_color)

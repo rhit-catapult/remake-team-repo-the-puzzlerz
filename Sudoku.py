@@ -34,6 +34,7 @@ class SudokuPopup:
 
         # Register validation command
         self.validate_cmd = (self.root.register(self.validate_digit), '%P', '%d')
+        self.root.protocol("WM_DELETE_WINDOW", self.close_window)
 
         # Create UI
         self.create_ui()
@@ -152,9 +153,13 @@ class SudokuPopup:
 
         # Close button
         close_btn = tk.Button(button_frame, text="Close",
-                              font=self.button_font, command=self.root.quit,
+                              font=self.button_font, command=self.close_window,
                               bg='#f44336', fg='white', padx=15, pady=8)
         close_btn.pack(side=tk.LEFT, padx=10)
+
+    def close_window(self):
+        """Close the Sudoku window cleanly."""
+        self.root.destroy()
 
     def new_puzzle_dialog(self):
         """Show difficulty selection dialog"""
