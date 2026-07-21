@@ -511,18 +511,6 @@ class WordSearchGame:
                                True, (110, 110, 110))
         screen.blit(hint, (40, HEIGHT - 26))
 
-    def draw_won_overlay(self):
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 120))
-        screen.blit(overlay, (0, 0))
-        box = pygame.Rect(WIDTH // 2 - 230, HEIGHT // 2 - 90, 460, 180)
-        pygame.draw.rect(screen, COL_PANEL, box, border_radius=12)
-        pygame.draw.rect(screen, GENRE_ACCENTS.get(self.genre, COL_BUTTON), box, 2, border_radius=12)
-        secs = self.elapsed_ms // 1000
-        msg = FONT_LG.render(f"All words found in {secs // 60:02d}:{secs % 60:02d}!", True, (30, 130, 30))
-        screen.blit(msg, msg.get_rect(center=(box.centerx, box.top + 55)))
-        sub = FONT_MD.render("Press N for a new puzzle, or M for the menu.", True, COL_TEXT)
-        screen.blit(sub, sub.get_rect(center=(box.centerx, box.top + 110)))
 
     # --------------------------------------------------------------- events
     def handle_event(self, event):
@@ -584,8 +572,7 @@ class WordSearchGame:
             self.draw_menu()
         else:
             self.draw_playing()
-            if self.state == "WON":
-                self.draw_won_overlay()
+
 
 
 def main():
