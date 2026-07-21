@@ -106,6 +106,11 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             if x_button_rect.collidepoint((mx, my)):
+                try:
+                    launcher_path = os.path.abspath(__file__)
+                    subprocess.Popen([sys.executable, launcher_path])
+                except Exception:
+                    pass
                 running = False
             elif music_button_rect.collidepoint((mx, my)):
                 try:

@@ -530,9 +530,17 @@ class WordSearchGame:
             pygame.quit()
             sys.exit()
 
+    def open_launcher(self):
+        try:
+            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+            subprocess.Popen([sys.executable, launcher_path])
+        except Exception:
+            pass
+
         if self.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.btn_close_menu.clicked(event.pos):
+                    self.open_launcher()
                     pygame.quit()
                     sys.exit()
                 for name, btn in self.genre_buttons.items():
@@ -547,6 +555,7 @@ class WordSearchGame:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.btn_close.clicked(event.pos):
+                self.open_launcher()
                 pygame.quit()
                 sys.exit()
             if self.btn_menu.clicked(event.pos):
