@@ -369,7 +369,9 @@ class WordSearchGame:
                     self.set_status("All words found!", (30, 130, 30))
                     try:
                         congrats_path = os.path.join(os.path.dirname(__file__), "CongratsScreen.py")
-                        subprocess.Popen([sys.executable, congrats_path])
+                        env = os.environ.copy()
+                        env["PUZZLER_GAME_TYPE"] = "word_search"
+                        subprocess.Popen([sys.executable, congrats_path], env=env)
                     except Exception:
                         pass
                     pygame.quit()

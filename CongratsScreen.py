@@ -5,6 +5,21 @@ import sys
 import pygame
 
 
+def open_game(game_type, launcher_path=None):
+    try:
+        if game_type == "sudoku":
+            target = os.path.join(os.path.dirname(__file__), "Sudoku.py")
+        elif game_type == "crossword":
+            target = os.path.join(os.path.dirname(__file__), "Crossword.py")
+        elif game_type == "word_search":
+            target = os.path.join(os.path.dirname(__file__), "Word_Search.py")
+        else:
+            target = launcher_path or os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+        subprocess.Popen([sys.executable, target])
+    except Exception:
+        pass
+
+
 def main():
     pygame.init()
     pygame.mixer.init()
@@ -26,7 +41,8 @@ def main():
     title_font = pygame.font.SysFont(None, 120)
     button_font = pygame.font.SysFont(None, 42)
 
-    close_button = pygame.Rect(300, 430, 200, 60)
+    close_button = pygame.Rect(220, 430, 160, 60)
+    back_button = pygame.Rect(420, 430, 220, 60)
 
     confetti = []
     corners = [(0, 0), (width, 0), (0, height), (width, height)]
@@ -41,6 +57,9 @@ def main():
             "color": random.choice([(255, 0, 0), (0, 180, 0), (0, 0, 255), (255, 165, 0), (255, 0, 255)]),
         })
 
+    game_type = os.environ.get("PUZZLER_GAME_TYPE", "")
+    launcher_path = os.environ.get("PUZZLER_LAUNCHER_PATH", "")
+
     running = True
     while running:
         for event in pygame.event.get():
@@ -51,11 +70,10 @@ def main():
                     running = False
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if close_button.collidepoint(event.pos):
-                    try:
-                        launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-                        subprocess.Popen([sys.executable, launcher_path])
-                    except Exception:
-                        pass
+                    open_game(game_type, launcher_path)
+                    running = False
+                elif back_button.collidepoint(event.pos):
+                    open_game(game_type, launcher_path)
                     running = False
 
         screen.fill(background_color)
@@ -69,6 +87,12 @@ def main():
         close_surface = button_font.render("Close", True, (255, 255, 255))
         close_rect = close_surface.get_rect(center=close_button.center)
         screen.blit(close_surface, close_rect)
+
+        pygame.draw.rect(screen, (40, 140, 220), back_button, border_radius=16)
+        pygame.draw.rect(screen, (255, 255, 255), back_button, width=3, border_radius=16)
+        back_surface = button_font.render("Back", True, (255, 255, 255))
+        back_rect = back_surface.get_rect(center=back_button.center)
+        screen.blit(back_surface, back_rect)
 
         for piece in confetti:
             piece["x"] += piece["dx"]

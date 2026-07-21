@@ -270,6 +270,18 @@ class SudokuPopup:
                     messagebox.showwarning("Incomplete", "Please fill all cells!")
                     return
 
+        if self.is_valid_solution():
+            try:
+                congrats_path = os.path.join(os.path.dirname(__file__), 'CongratsScreen.py')
+                env = os.environ.copy()
+                env['PUZZLER_GAME_TYPE'] = 'sudoku'
+                subprocess.Popen([sys.executable, congrats_path], env=env)
+            except Exception as e:
+                messagebox.showerror("Congratulations Error", f"Could not open the congratulations screen: {e}")
+            self.root.destroy()
+        else:
+            messagebox.showerror("Error", "There is an error in the puzzle. Please try again.")
+
         # Check if solution is valid
 
 

@@ -34,8 +34,10 @@ Requirements
 pip install pygame
 """
 
+import os
 import pygame
 import random
+import subprocess
 import sys
 
 # --------------------------------------------------------------------------
@@ -705,6 +707,22 @@ class CrosswordGame:
         screen.blit(sub, sub.get_rect(center=(box.centerx, box.top + 100)))
 
     # --------------------------------------------------------------- events
+    def open_launcher(self):
+        try:
+            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+            subprocess.Popen([sys.executable, launcher_path])
+        except Exception:
+            pass
+
+    def open_congrats_screen(self):
+        try:
+            congrats_path = os.path.join(os.path.dirname(__file__), "CongratsScreen.py")
+            env = os.environ.copy()
+            env["PUZZLER_GAME_TYPE"] = "crossword"
+            subprocess.Popen([sys.executable, congrats_path], env=env)
+        except Exception:
+            pass
+
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -716,6 +734,7 @@ class CrosswordGame:
         if self.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.btn_close_menu.clicked(event.pos):
+                    self.open_launcher()
                     pygame.quit()
                     sys.exit()
                 for name, btn in self.menu_buttons.items():
@@ -725,6 +744,7 @@ class CrosswordGame:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.btn_close.clicked(event.pos):
+                self.open_launcher()
                 pygame.quit()
                 sys.exit()
             if self.btn_menu.clicked(event.pos):
@@ -735,6 +755,10 @@ class CrosswordGame:
                 return
             if self.btn_check.clicked(event.pos):
                 self.check_answers()
+                if self.state == "WON":
+                    self.open_congrats_screen()
+                    pygame.quit()
+                    sys.exit()
                 return
             if self.btn_reveal.clicked(event.pos):
                 self.reveal()
