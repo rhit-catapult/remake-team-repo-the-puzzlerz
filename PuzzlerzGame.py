@@ -118,7 +118,6 @@ while running:
                 for t, rect in button_rects:
                     if rect.collidepoint((mx, my)):
                         if t == "Sudoku":
-                            # Launch Sudoku popup in a separate Python process to avoid mixing GUI loops
                             try:
                                 sudoku_path = os.path.join(os.path.dirname(__file__), 'Sudoku.py')
                                 subprocess.Popen([sys.executable, sudoku_path])
