@@ -27,7 +27,8 @@ Controls
 - Arrow keys move the selection.
 - Click a clue in the side panel to jump to that word.
 - Buttons: Check (highlights right/wrong), Reveal (fills the answer),
-  Clear (empties your input), New Puzzle (back to the difficulty menu).
+  Clear (empties your input), New Puzzle (back to the difficulty menu),
+  Hide/Show Timer (toggles the elapsed-time display).
 
 Requirements
 ------------
@@ -207,9 +208,6 @@ class CrosswordGenerator:
                     return False
                 has_intersection = True
             else:
-                # Non-intersection cell: perpendicular neighbours must be
-                # empty, otherwise this letter would silently touch an
-                # unrelated word and create an unintended entry.
                 if direction == 'H':
                     if (r - 1, c) in self.grid or (r + 1, c) in self.grid:
                         return False
@@ -380,6 +378,11 @@ class CrosswordGame:
         self.origin = (0, 0)       # pixel origin of the grid on screen
         self.bbox = (0, 0, 0, 0)
 
+        # Timer state
+        self.start_ticks = 0
+        self.elapsed_ms = 0
+        self.show_timer = True
+
         self.menu_buttons = {
             "Easy": Button((info.current_w // 2 - 140, 300, 280, 55), "Easy", FONT_LG),
             "Medium": Button((info.current_w // 2 - 140, 380, 280, 55), "Medium", FONT_LG),
@@ -392,6 +395,7 @@ class CrosswordGame:
         self.btn_check = Button((0, 0, 110, 36), "Check")
         self.btn_reveal = Button((0, 0, 110, 36), "Reveal")
         self.btn_clear = Button((0, 0, 110, 36), "Clear")
+        self.btn_timer = Button((0, 0, 130, 36), "Hide Timer")
         self.btn_menu = Button((0, 0, 110, 36), "Menu")
         self.btn_close = Button((0, 0, 90, 36), "Close", FONT_MD,
                                  color=COL_CLOSE, hover_color=COL_CLOSE_HOVER)
@@ -416,6 +420,8 @@ class CrosswordGame:
         ox = 40
         oy = 100 + max(0, (info.current_h - 160 - grid_pixel_h) // 2)
         self.origin = (ox, oy)
+        self.start_ticks = pygame.time.get_ticks()
+        self.elapsed_ms = 0
         self.set_status(f"{difficulty} puzzle ready \u2014 {len(self.gen.placed)} words placed.", COL_TEXT)
 
     def set_status(self, msg, color=COL_TEXT):
@@ -476,7 +482,6 @@ class CrosswordGame:
         if (r, c) not in self.gen.grid:
             return
         if self.selected == (r, c):
-            # flip direction if both exist
             other = "V" if self.direction == "H" else "H"
             if self.word_at(r, c, other):
                 self.direction = other
@@ -566,6 +571,10 @@ class CrosswordGame:
         self.check_flash = {}
         self.set_status("Cleared.", COL_TEXT)
 
+    def toggle_timer(self):
+        self.show_timer = not self.show_timer
+        self.btn_timer.text = "Hide Timer" if self.show_timer else "Show Timer"
+
     # ---------------------------------------------------------------- draw
     def draw_menu(self):
         screen.fill(COL_BG)
@@ -633,7 +642,11 @@ class CrosswordGame:
     def draw_clue_panel(self):
         panel_x = 40 + ((self.bbox[3] - self.bbox[2] + 1) * self.CELL) + 40
         panel_w = info.current_w - panel_x - 30
-        panel_rect = pygame.Rect(panel_x, 100, panel_w, info.current_h - 140)
+        # Start below the timer box (which sits at y=74-120 in the
+        # top-right corner) so the two never overlap, and shrink the
+        # panel's height to match.
+        panel_top = 134
+        panel_rect = pygame.Rect(panel_x, panel_top, panel_w, info.current_h - panel_top - 40)
         pygame.draw.rect(screen, COL_PANEL, panel_rect, border_radius=8)
         pygame.draw.rect(screen, COL_PANEL_BORDER, panel_rect, 1, border_radius=8)
 
@@ -654,7 +667,6 @@ class CrosswordGame:
                     pygame.draw.rect(screen, COL_WORD_HL, bg_rect, border_radius=4)
                 text = f'{w["number"]}. {w["clue"]}  ({len(w["word"])})'
                 lbl = FONT_SM.render(text, True, COL_TEXT)
-                # wrap manually if too long
                 max_w = panel_w - 24
                 if lbl.get_width() > max_w:
                     text = text[:int(len(text) * max_w / lbl.get_width()) - 1] + "…"
@@ -666,18 +678,31 @@ class CrosswordGame:
                     break
             y += 14
 
+    def draw_timer_box(self):
+        if self.state != "WON":
+            self.elapsed_ms = pygame.time.get_ticks() - self.start_ticks
+        if not self.show_timer:
+            return
+        secs = self.elapsed_ms // 1000
+        time_str = f"{secs // 60:02d}:{secs % 60:02d}"
+        timer_rect = pygame.Rect(info.current_w - 170, 74, 130, 46)
+        pygame.draw.rect(screen, COL_PANEL, timer_rect, border_radius=8)
+        pygame.draw.rect(screen, COL_PANEL_BORDER, timer_rect, 1, border_radius=8)
+        t_lbl = FONT_LG.render(time_str, True, COL_TEXT)
+        screen.blit(t_lbl, t_lbl.get_rect(center=timer_rect.center))
+
     def draw_topbar(self):
         title = FONT_LG.render(f"Crossword \u2014 {self.difficulty}", True, COL_TEXT)
         screen.blit(title, (40, 20))
 
         bx = info.current_w - 40
         for btn in (self.btn_close, self.btn_menu, self.btn_new, self.btn_clear,
-                    self.btn_reveal, self.btn_check):
+                    self.btn_reveal, self.btn_check, self.btn_timer):
             btn.rect.right = bx
             btn.rect.top = 30
             bx -= btn.rect.width + 10
-        for btn in (self.btn_check, self.btn_reveal, self.btn_clear, self.btn_new,
-                    self.btn_menu, self.btn_close):
+        for btn in (self.btn_timer, self.btn_check, self.btn_reveal, self.btn_clear,
+                    self.btn_new, self.btn_menu, self.btn_close):
             btn.draw(screen)
 
         if self.status_timer > 0:
@@ -688,6 +713,7 @@ class CrosswordGame:
     def draw_playing(self):
         screen.fill(COL_BG)
         self.draw_topbar()
+        self.draw_timer_box()
         self.draw_grid()
         self.draw_clue_panel()
         hint = FONT_SM.render(
@@ -766,6 +792,9 @@ class CrosswordGame:
                 return
             if self.btn_clear.clicked(event.pos):
                 self.clear_input()
+                return
+            if self.btn_timer.clicked(event.pos):
+                self.toggle_timer()
                 return
             for rect, word in getattr(self, "clue_click_areas", []):
                 if rect.collidepoint(event.pos):

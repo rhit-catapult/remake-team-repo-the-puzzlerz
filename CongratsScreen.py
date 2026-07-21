@@ -20,6 +20,16 @@ def open_game(game_type, launcher_path=None):
         pass
 
 
+def open_home(launcher_path=None):
+    """Always returns to the Puzzlerz Game main menu, regardless of
+    which puzzle was just completed."""
+    try:
+        target = launcher_path or os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+        subprocess.Popen([sys.executable, target])
+    except Exception:
+        pass
+
+
 def main():
     pygame.init()
     pygame.mixer.init()
@@ -71,9 +81,13 @@ def main():
                     running = False
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if close_button.collidepoint(event.pos):
-                    open_game(game_type, launcher_path)
+                    # "Close" always goes back to the main Puzzlerz
+                    # home screen, no matter which puzzle was solved.
+                    open_home(launcher_path)
                     running = False
                 elif back_button.collidepoint(event.pos):
+                    # "Back" relaunches the same puzzle type for
+                    # another round.
                     open_game(game_type, launcher_path)
                     running = False
 

@@ -27,7 +27,8 @@ Controls
   and crosses it off the list (works forwards or backwards).
 - Buttons: Reveal (shows all remaining words), New Puzzle (regenerate
   same genre/difficulty), Menu (back to genre/difficulty picker),
-  Close (quit). Escape also quits.
+  Hide/Show Timer (toggles the elapsed-time display), Close (quit).
+  Escape also quits.
 
 Requirements
 ------------
@@ -260,6 +261,7 @@ class WordSearchGame:
         self.origin = (60, 130)
         self.start_ticks = 0
         self.elapsed_ms = 0
+        self.show_timer = True
 
         self.genre_buttons = {}
         gx, gy = 90, 230
@@ -280,6 +282,7 @@ class WordSearchGame:
 
         self.btn_new = Button((0, 0, 150, 36), "New Puzzle")
         self.btn_reveal = Button((0, 0, 110, 36), "Reveal")
+        self.btn_timer = Button((0, 0, 130, 36), "Hide Timer")
         self.btn_menu = Button((0, 0, 110, 36), "Menu")
         self.btn_close = Button((0, 0, 90, 36), "Close", FONT_MD,
                                  color=COL_CLOSE, hover_color=COL_CLOSE_HOVER)
@@ -386,6 +389,10 @@ class WordSearchGame:
                 self.found_words[p["word"]] = (p["cells"], (210, 210, 210))
         self.set_status("Remaining words revealed.", COL_TEXT)
 
+    def toggle_timer(self):
+        self.show_timer = not self.show_timer
+        self.btn_timer.text = "Hide Timer" if self.show_timer else "Show Timer"
+
     # ---------------------------------------------------------------- draw
     def draw_menu(self):
         screen.fill(COL_BG)
@@ -488,26 +495,27 @@ class WordSearchGame:
                 break
 
         # timer box below the word list
-        timer_rect = pygame.Rect(panel_x, panel_rect.bottom + 16, panel_w, 60)
-        pygame.draw.rect(screen, COL_PANEL, timer_rect, border_radius=8)
-        pygame.draw.rect(screen, COL_PANEL_BORDER, timer_rect, 1, border_radius=8)
         if self.state != "WON":
             self.elapsed_ms = pygame.time.get_ticks() - self.start_ticks
-        secs = self.elapsed_ms // 1000
-        time_str = f"{secs // 60:02d}:{secs % 60:02d}"
-        t_lbl = FONT_LG.render(time_str, True, COL_TEXT)
-        screen.blit(t_lbl, t_lbl.get_rect(center=timer_rect.center))
+        if self.show_timer:
+            timer_rect = pygame.Rect(panel_x, panel_rect.bottom + 16, panel_w, 60)
+            pygame.draw.rect(screen, COL_PANEL, timer_rect, border_radius=8)
+            pygame.draw.rect(screen, COL_PANEL_BORDER, timer_rect, 1, border_radius=8)
+            secs = self.elapsed_ms // 1000
+            time_str = f"{secs // 60:02d}:{secs % 60:02d}"
+            t_lbl = FONT_LG.render(time_str, True, COL_TEXT)
+            screen.blit(t_lbl, t_lbl.get_rect(center=timer_rect.center))
 
     def draw_topbar(self):
         title = FONT_LG.render(f"Word Search \u2014 {self.genre} ({self.difficulty})", True, COL_TEXT)
         screen.blit(title, (40, 20))
 
         bx = WIDTH - 40
-        for btn in (self.btn_close, self.btn_menu, self.btn_new, self.btn_reveal):
+        for btn in (self.btn_close, self.btn_menu, self.btn_new, self.btn_reveal, self.btn_timer):
             btn.rect.right = bx
             btn.rect.top = 30
             bx -= btn.rect.width + 10
-        for btn in (self.btn_reveal, self.btn_new, self.btn_menu, self.btn_close):
+        for btn in (self.btn_timer, self.btn_reveal, self.btn_new, self.btn_menu, self.btn_close):
             btn.draw(screen)
 
         if self.status_timer > 0:
@@ -569,6 +577,9 @@ class WordSearchGame:
                 return
             if self.btn_reveal.clicked(event.pos):
                 self.reveal()
+                return
+            if self.btn_timer.clicked(event.pos):
+                self.toggle_timer()
                 return
             if self.state == "PLAYING":
                 self.start_drag(event.pos)
