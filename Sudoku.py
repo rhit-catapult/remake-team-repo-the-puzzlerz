@@ -11,7 +11,23 @@ class SudokuPopup:
         self.root = root
         self.root.title("Sudoku")
         self.root.state('zoomed')  # Maximize window
-        self.root.configure(bg='white')
+
+        # -- Shared palette (matches Word Search / Crossword) --
+        self.bg_color = '#F5F4EE'
+        self.panel_color = '#FFFFFF'
+        self.panel_border = '#D2D2CD'
+        self.text_color = '#191919'
+        self.line_color = '#E1E1DC'
+        self.thick_line_color = '#787878'
+        self.clue_color = '#DCE6FA'      # light blue tint, derived from button blue
+        self.input_color = '#FFFFFF'
+        self.button_color = '#466EC8'
+        self.button_hover = '#5F87E1'
+        self.close_color = '#CD4646'
+        self.close_hover = '#E15F5F'
+        self.button_text_color = '#FFFFFF'
+
+        self.root.configure(bg=self.bg_color)
 
         # Generator
         self.generator = SudokuGen()
@@ -20,17 +36,12 @@ class SudokuPopup:
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # User input grid
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # Original puzzle
 
-        # Fonts
-        self.title_font = font.Font(family="Arial", size=28, weight="bold")
-        self.cell_font = font.Font(family="Arial", size=20, weight="bold")
+        # Fonts (Arial for UI text, Consolas bold for grid digits -- matches Word Search)
+        self.title_font = font.Font(family="Arial", size=26, weight="bold")
+        self.cell_font = font.Font(family="Consolas", size=20, weight="bold")
+        if not self.cell_font.actual("family").lower().startswith("consolas"):
+            self.cell_font = font.Font(family="Courier New", size=20, weight="bold")
         self.button_font = font.Font(family="Arial", size=12)
-
-        # Colors
-        self.bg_color = 'white'
-        self.cell_color = '#f0f0f0'
-        self.input_color = '#e3f2fd'
-        self.clue_color = '#fffacd'
-        self.border_color = 'black'
 
         # Register validation command
         self.validate_cmd = (self.root.register(self.validate_digit), '%P', '%d')
@@ -59,11 +70,13 @@ class SudokuPopup:
         """Create the popup UI"""
         # Title
         title_label = tk.Label(self.root, text="Sudoku",
-                               font=self.title_font, bg='white', fg='black')
+                               font=self.title_font, bg=self.bg_color, fg=self.text_color)
         title_label.pack(pady=20)
 
-        # Puzzle frame
-        puzzle_frame = tk.Frame(self.root, bg='black')
+        # Puzzle frame (acts as the thick outer/section border, like the word-search grid outline)
+        puzzle_frame = tk.Frame(self.root, bg=self.thick_line_color,
+                                 highlightbackground=self.panel_border,
+                                 highlightthickness=1)
         puzzle_frame.pack(pady=20)
 
         # Create grid with Entry widgets
@@ -87,10 +100,13 @@ class SudokuPopup:
                 # Right: 3px if col 2 or col 5 or col 8, else 1px
                 border_right = 3 if col in [2, 5, 8] else 1
 
-                # Create container frame to simulate directional borders
+                # Create container frame to simulate directional borders.
+                # Thick dividers use thick_line_color, thin grid lines use line_color.
                 container = tk.Frame(
                     puzzle_frame,
-                    bg='black',
+                    bg=self.thick_line_color if (border_top == 3 or border_left == 3
+                                                  or border_bottom == 3 or border_right == 3)
+                        else self.line_color,
                     width=44 + border_left + border_right,
                     height=44 + border_top + border_bottom
                 )
@@ -105,8 +121,8 @@ class SudokuPopup:
                     width=3,
                     justify='center',
                     bg=cell_bg,
-                    fg='black',
-                    relief='solid',
+                    fg=self.text_color,
+                    relief='flat',
                     borderwidth=0,
                     validate='key',
                     validatecommand=self.validate_cmd
@@ -121,7 +137,7 @@ class SudokuPopup:
 
                 # Disable editing for clue cells
                 if is_clue:
-                    entry.config(state='readonly')
+                    entry.config(state='readonly', readonlybackground=cell_bg)
                 else:
                     # Bind validation for empty cells
                     entry.bind('<KeyRelease>', lambda e, r=row, c=col: self.on_cell_change(r, c, e))
@@ -130,32 +146,41 @@ class SudokuPopup:
                 self.cells[(row, col)] = entry
 
         # Button frame
-        button_frame = tk.Frame(self.root, bg='white')
+        button_frame = tk.Frame(self.root, bg=self.bg_color)
         button_frame.pack(pady=20)
 
         # New puzzle button
-        new_btn = tk.Button(button_frame, text="New Puzzle",
-                            font=self.button_font, command=self.new_puzzle_dialog,
-                            bg='#4CAF50', fg='white', padx=15, pady=8)
+        new_btn = self._make_button(button_frame, "New Puzzle", self.new_puzzle_dialog,
+                                     self.button_color, self.button_hover)
         new_btn.pack(side=tk.LEFT, padx=10)
 
         # Clear button
-        clear_btn = tk.Button(button_frame, text="Clear Entries",
-                              font=self.button_font, command=self.clear_entries,
-                              bg='#FF9800', fg='white', padx=15, pady=8)
+        clear_btn = self._make_button(button_frame, "Clear Entries", self.clear_entries,
+                                       self.button_color, self.button_hover)
         clear_btn.pack(side=tk.LEFT, padx=10)
 
         # Check button
-        check_btn = tk.Button(button_frame, text="Check Solution",
-                              font=self.button_font, command=self.check_solution,
-                              bg='#2196F3', fg='white', padx=15, pady=8)
+        check_btn = self._make_button(button_frame, "Check Solution", self.check_solution,
+                                       self.button_color, self.button_hover)
         check_btn.pack(side=tk.LEFT, padx=10)
 
         # Close button
-        close_btn = tk.Button(button_frame, text="Close",
-                              font=self.button_font, command=self.close_window,
-                              bg='#f44336', fg='white', padx=15, pady=8)
+        close_btn = self._make_button(button_frame, "Close", self.close_window,
+                                       self.close_color, self.close_hover)
         close_btn.pack(side=tk.LEFT, padx=10)
+
+    def _make_button(self, parent, text, command, color, hover_color):
+        """Flat, rounded-feel button styled to match Word Search / Crossword buttons."""
+        btn = tk.Button(
+            parent, text=text, font=self.button_font, command=command,
+            bg=color, fg=self.button_text_color,
+            activebackground=hover_color, activeforeground=self.button_text_color,
+            relief='flat', bd=0, padx=18, pady=10, cursor='hand2',
+            highlightthickness=0
+        )
+        btn.bind('<Enter>', lambda e: btn.config(bg=hover_color))
+        btn.bind('<Leave>', lambda e: btn.config(bg=color))
+        return btn
 
     def close_window(self):
         """Close the Sudoku window and reopen the main launcher interface."""
@@ -171,7 +196,7 @@ class SudokuPopup:
         dialog = tk.Toplevel(self.root)
         dialog.title("Select Difficulty")
         dialog.geometry("400x400")
-        dialog.configure(bg='white')
+        dialog.configure(bg=self.bg_color)
         dialog.resizable(False, False)
 
         # Center the dialog on screen
@@ -190,28 +215,25 @@ class SudokuPopup:
 
         label = tk.Label(dialog, text="Choose Difficulty Level:",
                          font=font.Font(family="Arial", size=16, weight="bold"),
-                         bg='white', fg='black')
+                         bg=self.bg_color, fg=self.text_color)
         label.pack(pady=40)
 
         # Easy button
-        easy_btn = tk.Button(dialog, text="Easy (45-54 clues)",
-                             font=self.button_font,
-                             bg='#4CAF50', fg='white', padx=30, pady=15,
-                             command=lambda: self.generate_new_puzzle('easy', dialog))
+        easy_btn = self._make_button(dialog, "Easy (45-54 clues)",
+                                      lambda: self.generate_new_puzzle('easy', dialog),
+                                      self.button_color, self.button_hover)
         easy_btn.pack(pady=20)
 
         # Medium button
-        medium_btn = tk.Button(dialog, text="Medium (30-40 clues)",
-                               font=self.button_font,
-                               bg='#2196F3', fg='white', padx=30, pady=15,
-                               command=lambda: self.generate_new_puzzle('medium', dialog))
+        medium_btn = self._make_button(dialog, "Medium (30-40 clues)",
+                                        lambda: self.generate_new_puzzle('medium', dialog),
+                                        self.button_color, self.button_hover)
         medium_btn.pack(pady=20)
 
         # Hard button
-        hard_btn = tk.Button(dialog, text="Hard (17-25 clues)",
-                             font=self.button_font,
-                             bg='#f44336', fg='white', padx=30, pady=15,
-                             command=lambda: self.generate_new_puzzle('hard', dialog))
+        hard_btn = self._make_button(dialog, "Hard (17-25 clues)",
+                                      lambda: self.generate_new_puzzle('hard', dialog),
+                                      self.close_color, self.close_hover)
         hard_btn.pack(pady=20)
 
     def generate_new_puzzle(self, difficulty, dialog):
@@ -245,7 +267,7 @@ class SudokuPopup:
 
                 # Lock clue cells and rebind empty cells
                 if is_clue:
-                    entry.config(state='readonly')
+                    entry.config(state='readonly', readonlybackground=cell_bg)
                 else:
                     entry.bind('<KeyRelease>', lambda e, r=row, c=col: self.on_cell_change(r, c, e))
 
@@ -290,9 +312,6 @@ class SudokuPopup:
             self.root.destroy()
         else:
             messagebox.showerror("Error", "There is an error in the puzzle. Please try again.")
-
-        # Check if solution is valid
-
 
     def is_valid_solution(self):
         """Validate the current solution"""
