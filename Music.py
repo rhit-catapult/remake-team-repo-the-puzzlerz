@@ -18,7 +18,7 @@ button_font = pygame.font.SysFont(None, 40)
 
 running=True
 while running:
-    button_texts = ["Ambient", "Classical", "Jazz", "Upbeat"]
+    button_texts = ["Ambient", "Classical", "Jazz", "Upbeat", "Mute"]
     button_width = 320
     button_height = 60
     button_spacing = 18
@@ -44,19 +44,29 @@ while running:
             for t, rect in button_rects:
                 if rect.collidepoint((mx, my)):
                     if t == "Ambient":
+                        pygame.mixer.music.set_volume(0.125)
                         pygame.mixer.music.load("Ambient.mp3")
                         pygame.mixer.music.play(-1)  # -1 = loop forever
                     elif t == "Classical":
+                        pygame.mixer.music.set_volume(0.25)
                         pygame.mixer.music.load("Classical.mp3")
                         pygame.mixer.music.play(-1)  # -1 = loop forever
                     elif t == "Jazz":
+                        pygame.mixer.music.set_volume(0.125)
                         pygame.mixer.music.load("Jazz.mp3")
                         pygame.mixer.music.play(-1)  # -1 = loop forever
                     elif t== "Upbeat":
+                        pygame.mixer.music.set_volume(0.0625)
                         pygame.mixer.music.load("Upbeat.mp3")
                         pygame.mixer.music.play(-1)  # -1 = loop forever
+                    elif t == "Mute":
+                        pygame.mixer.music.set_volume(0)
 
     screen.fill((255, 255, 255))
+
+    title_surface = title_font.render("Music", True, (40, 40, 100))
+    title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 50))
+    screen.blit(title_surface, title_rect)
 
     # Draw buttons and labels
     for text, button_rect in button_rects:
