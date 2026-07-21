@@ -34,9 +34,11 @@ Requirements
 pip install pygame
 """
 
+import os
 import pygame
 import random
 import string
+import subprocess
 import sys
 
 # --------------------------------------------------------------------------
@@ -365,6 +367,13 @@ class WordSearchGame:
                     self.state = "WON"
                     self.elapsed_ms = pygame.time.get_ticks() - self.start_ticks
                     self.set_status("All words found!", (30, 130, 30))
+                    try:
+                        congrats_path = os.path.join(os.path.dirname(__file__), "CongratsScreen.py")
+                        subprocess.Popen([sys.executable, congrats_path])
+                    except Exception:
+                        pass
+                    pygame.quit()
+                    sys.exit()
                 return
 
     def reveal(self):
