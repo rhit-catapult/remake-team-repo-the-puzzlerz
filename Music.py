@@ -5,7 +5,8 @@ import pygame
 pygame.init()
 
 # Create the window surface (width, height)
-screen = pygame.display.set_mode((800, 600))
+info = pygame.display.Info()
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 pygame.display.set_caption("Music")
 
 clock = pygame.time.Clock()
