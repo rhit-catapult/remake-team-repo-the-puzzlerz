@@ -522,8 +522,14 @@ class WordSearchGame:
                                True, (110, 110, 110))
         screen.blit(hint, (40, HEIGHT - 26))
 
-
     # --------------------------------------------------------------- events
+    def open_launcher(self):
+        try:
+            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+            subprocess.Popen([sys.executable, launcher_path])
+        except Exception:
+            pass
+
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -531,13 +537,6 @@ class WordSearchGame:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             pygame.quit()
             sys.exit()
-
-    def open_launcher(self):
-        try:
-            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-            subprocess.Popen([sys.executable, launcher_path])
-        except Exception:
-            pass
 
         if self.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
@@ -592,7 +591,6 @@ class WordSearchGame:
             self.draw_menu()
         else:
             self.draw_playing()
-
 
 
 def main():
