@@ -312,8 +312,8 @@ def build_puzzle(difficulty, seed=None):
 pygame.init()
 pygame.display.set_caption("Crossword Generator")
 
-WIDTH, HEIGHT = 1150, 780
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+info = pygame.display.Info()
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 clock = pygame.time.Clock()
 
 FONT_SM = pygame.font.SysFont("arial", 14)
@@ -378,11 +378,11 @@ class CrosswordGame:
         self.bbox = (0, 0, 0, 0)
 
         self.menu_buttons = {
-            "Easy": Button((WIDTH // 2 - 140, 300, 280, 55), "Easy", FONT_LG),
-            "Medium": Button((WIDTH // 2 - 140, 380, 280, 55), "Medium", FONT_LG),
-            "Hard": Button((WIDTH // 2 - 140, 460, 280, 55), "Hard", FONT_LG),
+            "Easy": Button((info.current_w // 2 - 140, 300, 280, 55), "Easy", FONT_LG),
+            "Medium": Button((info.current_w // 2 - 140, 380, 280, 55), "Medium", FONT_LG),
+            "Hard": Button((info.current_w // 2 - 140, 460, 280, 55), "Hard", FONT_LG),
         }
-        self.btn_close_menu = Button((WIDTH - 40 - 90, 20, 90, 34), "Close", FONT_MD,
+        self.btn_close_menu = Button((info.current_w - 40 - 90, 20, 90, 34), "Close", FONT_MD,
                                       color=COL_CLOSE, hover_color=COL_CLOSE_HOVER)
 
         self.btn_new = Button((0, 0, 150, 36), "New Puzzle")
@@ -411,7 +411,7 @@ class CrosswordGame:
         grid_pixel_w = cols * self.CELL
         grid_pixel_h = rows * self.CELL
         ox = 40
-        oy = 100 + max(0, (HEIGHT - 160 - grid_pixel_h) // 2)
+        oy = 100 + max(0, (info.current_h - 160 - grid_pixel_h) // 2)
         self.origin = (ox, oy)
         self.set_status(f"{difficulty} puzzle ready \u2014 {len(self.gen.placed)} words placed.", COL_TEXT)
 
@@ -567,10 +567,10 @@ class CrosswordGame:
     def draw_menu(self):
         screen.fill(COL_BG)
         title = FONT_LG.render("Crossword Generator", True, COL_TEXT)
-        screen.blit(title, title.get_rect(center=(WIDTH // 2, 130)))
+        screen.blit(title, title.get_rect(center=(info.current_w // 2, 130)))
         subtitle = FONT_MD.render("Choose a difficulty to generate a new solvable puzzle",
                                    True, (90, 90, 90))
-        screen.blit(subtitle, subtitle.get_rect(center=(WIDTH // 2, 175)))
+        screen.blit(subtitle, subtitle.get_rect(center=(info.current_w // 2, 175)))
 
         descs = {
             "Easy": "Small grid, short common words, lots of overlap.",
@@ -580,7 +580,7 @@ class CrosswordGame:
         for name, btn in self.menu_buttons.items():
             btn.draw(screen)
             desc = FONT_SM.render(descs[name], True, (90, 90, 90))
-            screen.blit(desc, desc.get_rect(center=(WIDTH // 2, btn.rect.bottom + 16)))
+            screen.blit(desc, desc.get_rect(center=(info.current_w // 2, btn.rect.bottom + 16)))
 
         self.btn_close_menu.draw(screen)
 
@@ -629,8 +629,8 @@ class CrosswordGame:
 
     def draw_clue_panel(self):
         panel_x = 40 + ((self.bbox[3] - self.bbox[2] + 1) * self.CELL) + 40
-        panel_w = WIDTH - panel_x - 30
-        panel_rect = pygame.Rect(panel_x, 100, panel_w, HEIGHT - 140)
+        panel_w = info.current_w - panel_x - 30
+        panel_rect = pygame.Rect(panel_x, 100, panel_w, info.current_h - 140)
         pygame.draw.rect(screen, COL_PANEL, panel_rect, border_radius=8)
         pygame.draw.rect(screen, COL_PANEL_BORDER, panel_rect, 1, border_radius=8)
 
@@ -667,7 +667,7 @@ class CrosswordGame:
         title = FONT_LG.render(f"Crossword \u2014 {self.difficulty}", True, COL_TEXT)
         screen.blit(title, (40, 20))
 
-        bx = WIDTH - 40
+        bx = info.current_w - 40
         for btn in (self.btn_close, self.btn_menu, self.btn_new, self.btn_clear,
                     self.btn_reveal, self.btn_check):
             btn.rect.right = bx
@@ -690,13 +690,13 @@ class CrosswordGame:
         hint = FONT_SM.render(
             "Click a cell to select \u00b7 type letters \u00b7 Tab flips Across/Down \u00b7 arrows move",
             True, (110, 110, 110))
-        screen.blit(hint, (40, HEIGHT - 26))
+        screen.blit(hint, (40, info.current_h - 26))
 
     def draw_won_overlay(self):
-        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        overlay = pygame.Surface((info.current_w, info.current_h), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 120))
         screen.blit(overlay, (0, 0))
-        box = pygame.Rect(WIDTH // 2 - 220, HEIGHT // 2 - 90, 440, 180)
+        box = pygame.Rect(info.current_w // 2 - 220, info.current_h // 2 - 90, 440, 180)
         pygame.draw.rect(screen, COL_PANEL, box, border_radius=12)
         pygame.draw.rect(screen, COL_ACCENT, box, 2, border_radius=12)
         msg = FONT_LG.render("Puzzle Solved!", True, (30, 140, 30))
