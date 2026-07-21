@@ -1,6 +1,6 @@
 import os
-import subprocess
 import sys
+import subprocess
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
@@ -153,18 +153,9 @@ class SudokuPopup:
 
         # Close button
         close_btn = tk.Button(button_frame, text="Close",
-                              font=self.button_font, command=self.close_window,
+                              font=self.button_font, command=self.root.quit,
                               bg='#f44336', fg='white', padx=15, pady=8)
         close_btn.pack(side=tk.LEFT, padx=10)
-
-    def close_window(self):
-        """Close the Sudoku window and reopen the main launcher screen."""
-        self.root.destroy()
-        try:
-            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-            subprocess.Popen([sys.executable, launcher_path])
-        except Exception:
-            pass
 
     def new_puzzle_dialog(self):
         """Show difficulty selection dialog"""
