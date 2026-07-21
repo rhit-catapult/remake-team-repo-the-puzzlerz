@@ -91,7 +91,7 @@ while running:
     button_border = (70, 90, 160)
     button_text_color = (25, 35, 85)
     x_button_rect = pygame.Rect(20, 20, 58, 58)
-    music_button_rect = pygame.Rect(screen.get_width() // 2 - 120, screen.get_height() - 120, 240, 60)
+    music_button_rect = pygame.Rect(screen.get_width() - 220, 20, 180, 58)
 
     # Create button rects before handling events so clicks map correctly
     button_rects = []
