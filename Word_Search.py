@@ -184,11 +184,13 @@ def build_puzzle(genre, difficulty, seed=None):
 # Pygame application
 # --------------------------------------------------------------------------
 
-pygame.init()
+pygame.display.init()
+pygame.font.init()
 pygame.display.set_caption("Word Search Generator")
 
-WIDTH, HEIGHT = 1150, 780
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+info = pygame.display.Info()
+WIDTH, HEIGHT = info.current_w, info.current_h
+screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
 clock = pygame.time.Clock()
 
 FONT_SM = pygame.font.SysFont("arial", 15)

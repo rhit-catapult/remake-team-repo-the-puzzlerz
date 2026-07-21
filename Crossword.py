@@ -311,7 +311,8 @@ def build_puzzle(difficulty, seed=None):
 # Pygame application
 # --------------------------------------------------------------------------
 
-pygame.init()
+pygame.display.init()
+pygame.font.init()
 pygame.display.set_caption("Crossword Generator")
 
 info = pygame.display.Info()

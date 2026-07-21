@@ -1,13 +1,52 @@
 import os
+import signal
 import subprocess
 import sys
+import tempfile
 import pygame
 
 
-# Initialize all imported pygame modules
 pygame.init()
 
-# Create the window surface (width, height)
+MUSIC_PID_PATH = os.path.join(tempfile.gettempdir(), "puzzlerz_music.pid")
+
+
+def write_pid():
+    """Record/refresh this process's PID + a fresh timestamp, so other
+    Puzzlerz processes can tell this Music window is alive."""
+    try:
+        with open(MUSIC_PID_PATH, "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
+def clear_pid():
+    try:
+        if os.path.exists(MUSIC_PID_PATH):
+            with open(MUSIC_PID_PATH) as f:
+                existing = f.read().strip()
+            if existing == str(os.getpid()):
+                os.remove(MUSIC_PID_PATH)
+    except OSError:
+        pass
+
+
+def _on_terminate(signum, frame):
+    """Runs when the launcher deliberately stops this process (i.e.
+    the whole Puzzlerz app is being closed) -- clean up before exiting."""
+    clear_pid()
+    pygame.quit()
+    sys.exit(0)
+
+
+try:
+    signal.signal(signal.SIGTERM, _on_terminate)
+except (ValueError, AttributeError):
+    pass  # some platforms don't support custom handlers here -- harmless
+
+write_pid()
+
 info = pygame.display.Info()
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 pygame.display.set_caption("Music")
@@ -18,10 +57,9 @@ button_font = pygame.font.SysFont(None, 40)
 small_font = pygame.font.SysFont(None, 28)
 
 running = True
-
-# Master volume, controlled by the slider (0.0 - 1.0)
 current_volume = 0.125
 dragging_slider = False
+last_heartbeat_ms = 0
 
 while running:
     button_texts = ["Ambient", "Classical", "Jazz", "Upbeat", "Mute"]
@@ -34,19 +72,16 @@ while running:
     button_border = (70, 90, 160)
     button_text_color = (25, 35, 85)
 
-    # Special styling for the Mute button (red)
     mute_button_color = (225, 60, 60)
     mute_button_border = (140, 20, 20)
     mute_text_color = (255, 255, 255)
 
-    # Create button rects before handling events so clicks map correctly
     button_rects = []
     temp_y = button_y
     for text in button_texts:
         button_rects.append((text, pygame.Rect(button_x, temp_y, button_width, button_height)))
         temp_y += button_height + button_spacing
 
-    # --- Volume slider layout ---
     slider_width = 320
     slider_x = (screen.get_width() - slider_width) // 2
     slider_y = temp_y + 30
@@ -57,7 +92,6 @@ while running:
     handle_rect = pygame.Rect(0, 0, handle_radius * 2, handle_radius * 2)
     handle_rect.center = handle_center
 
-    # --- Close button (top-right corner) ---
     close_button_rect = pygame.Rect(screen.get_width() - 100, 15, 85, 35)
 
     for event in pygame.event.get():
@@ -67,16 +101,18 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
 
-            # Close button
             if close_button_rect.collidepoint((mx, my)):
+                # Return to the main menu WITHOUT killing this process
+                # -- the mixer keeps playing in the background. This
+                # is what lets music keep going while you're inside a
+                # puzzle. It only truly stops when the whole app exits.
                 try:
                     launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
                     subprocess.Popen([sys.executable, launcher_path])
                 except Exception:
                     pass
-                running = False
+                pygame.display.iconify()
 
-            # Volume slider - clicking the track or handle starts dragging
             elif slider_track_rect.inflate(0, 20).collidepoint((mx, my)) or handle_rect.collidepoint((mx, my)):
                 dragging_slider = True
                 rel_x = min(max(mx - slider_x, 0), slider_width)
@@ -84,24 +120,23 @@ while running:
                 pygame.mixer.music.set_volume(current_volume)
 
             else:
-                # detect which music button was clicked
                 for t, rect in button_rects:
                     if rect.collidepoint((mx, my)):
                         if t == "Ambient":
                             pygame.mixer.music.load("Ambient.mp3")
-                            pygame.mixer.music.play(-1)  # -1 = loop forever
+                            pygame.mixer.music.play(-1)
                             pygame.mixer.music.set_volume(current_volume)
                         elif t == "Classical":
                             pygame.mixer.music.load("Classical.mp3")
-                            pygame.mixer.music.play(-1)  # -1 = loop forever
+                            pygame.mixer.music.play(-1)
                             pygame.mixer.music.set_volume(current_volume)
                         elif t == "Jazz":
                             pygame.mixer.music.load("Jazz.mp3")
-                            pygame.mixer.music.play(-1)  # -1 = loop forever
+                            pygame.mixer.music.play(-1)
                             pygame.mixer.music.set_volume(current_volume)
                         elif t == "Upbeat":
                             pygame.mixer.music.load("Upbeat.mp3")
-                            pygame.mixer.music.play(-1)  # -1 = loop forever
+                            pygame.mixer.music.play(-1)
                             pygame.mixer.music.set_volume(current_volume)
                         elif t == "Mute":
                             pygame.mixer.music.set_volume(0)
@@ -115,13 +150,19 @@ while running:
             current_volume = rel_x / slider_width
             pygame.mixer.music.set_volume(current_volume)
 
+    # Refresh the heartbeat roughly once a second so the launcher can
+    # tell this process is still alive, even while minimized.
+    now_ms = pygame.time.get_ticks()
+    if now_ms - last_heartbeat_ms > 1000:
+        write_pid()
+        last_heartbeat_ms = now_ms
+
     screen.fill((255, 255, 255))
 
     title_surface = title_font.render("Music", True, (40, 40, 100))
     title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 50))
     screen.blit(title_surface, title_rect)
 
-    # Draw buttons and labels
     for text, button_rect in button_rects:
         shadow_rect = button_rect.move(0, 6)
         pygame.draw.rect(screen, (220, 225, 235), shadow_rect, border_radius=18)
@@ -141,7 +182,6 @@ while running:
         label_rect = label_surface.get_rect(center=button_rect.center)
         screen.blit(label_surface, label_rect)
 
-    # Draw volume slider
     volume_label = small_font.render("Volume", True, (40, 40, 100))
     volume_label_rect = volume_label.get_rect(midbottom=(slider_track_rect.centerx, slider_track_rect.top - 10))
     screen.blit(volume_label, volume_label_rect)
@@ -156,7 +196,6 @@ while running:
     percent_label_rect = percent_label.get_rect(midtop=(slider_track_rect.centerx, slider_track_rect.bottom + 8))
     screen.blit(percent_label, percent_label_rect)
 
-    # Draw close button (solid red with "Close" label)
     pygame.draw.rect(screen, (200, 30, 30), close_button_rect, border_radius=8)
     pygame.draw.rect(screen, (140, 20, 20), close_button_rect, width=2, border_radius=8)
     close_label = small_font.render("Close", True, (255, 255, 255))
@@ -166,5 +205,7 @@ while running:
     pygame.display.flip()
     clock.tick(60)
 
-# Uninitialize pygame modules cleanly before closing script
+# Only reached on a genuine quit (window closed directly, or the
+# launcher terminated this process via the app-exit path).
+clear_pid()
 pygame.quit()

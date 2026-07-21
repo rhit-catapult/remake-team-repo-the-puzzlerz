@@ -24,8 +24,9 @@ def main():
     pygame.init()
     pygame.mixer.init()
 
-    width, height = 800, 600
-    screen = pygame.display.set_mode((width, height))
+    info = pygame.display.Info()
+    width, height = info.current_w, info.current_h
+    screen = pygame.display.set_mode((width, height), pygame.FULLSCREEN)
     pygame.display.set_caption("Congratulations")
     clock = pygame.time.Clock()
 
@@ -41,8 +42,8 @@ def main():
     title_font = pygame.font.SysFont(None, 120)
     button_font = pygame.font.SysFont(None, 42)
 
-    close_button = pygame.Rect(220, 430, 160, 60)
-    back_button = pygame.Rect(420, 430, 220, 60)
+    close_button = pygame.Rect(width // 2 - 200, height // 2 + 60, 160, 60)
+    back_button = pygame.Rect(width // 2 + 40, height // 2 + 60, 220, 60)
 
     confetti = []
     corners = [(0, 0), (width, 0), (0, height), (width, height)]

@@ -5,8 +5,48 @@ from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
 import subprocess
 import sys
+import tempfile
+import time
+import signal
 
-pygame.init()
+# Only init display + font here -- NOT the full pygame.init(), so this
+# process never touches the audio device and can't interrupt whatever
+# is currently playing in Music.py.
+pygame.display.init()
+pygame.font.init()
+
+MUSIC_PID_PATH = os.path.join(tempfile.gettempdir(), "puzzlerz_music.pid")
+
+
+def music_already_running():
+    """True if Music.py's heartbeat file was touched recently, meaning
+    a Music process is alive (and playing) somewhere right now."""
+    try:
+        mtime = os.path.getmtime(MUSIC_PID_PATH)
+    except OSError:
+        return False
+    return (time.time() - mtime) < 3
+
+
+def stop_music_process():
+    """Terminate the background Music.py process (if any). Called only
+    when the whole Puzzlerz app is being closed -- not when simply
+    navigating to a puzzle -- so music stops exactly when you exit."""
+    try:
+        with open(MUSIC_PID_PATH, "r") as f:
+            pid = int(f.read().strip())
+    except (OSError, ValueError):
+        return
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except OSError:
+        pass  # already gone
+    try:
+        os.remove(MUSIC_PID_PATH)
+    except OSError:
+        pass
+
+
 # Try to load a jigsaw outline image (place your image at project root or in assets/)
 jigsaw_image = None
 _jigsaw_paths = (
@@ -36,7 +76,6 @@ def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
     shadow = body.move(6, 6)
     pygame.draw.rect(surface, (206, 216, 232), shadow, border_radius=26)
 
-    # If a jigsaw outline image is available, use it (image should include transparent background)
     if jigsaw_image:
         pygame.draw.rect(surface, color, body, border_radius=22)
         img = pygame.transform.smoothscale(jigsaw_image, (width, height))
@@ -46,40 +85,34 @@ def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
         pygame.draw.rect(surface, outline_color, body, width=2, border_radius=22)
         return
 
-    # Fallback: draw a more literal jigsaw piece with a protruding tab and a square-edged socket.
     bg_color = (255, 255, 255)
     tab_w = 42
     tab_h = 28
 
     pygame.draw.rect(surface, color, body, border_radius=22)
-
-    # Draw the outer border only on the shaded region around the edge of the piece.
     pygame.draw.rect(surface, outline_color, (x + 2, y - height + 2, width - 4, height - 4), width=3, border_radius=18)
 
-    # Top tab
     pygame.draw.rect(surface, color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h))
     pygame.draw.rect(surface, outline_color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h), width=3)
 
-    # Right tab
     pygame.draw.rect(surface, color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w))
     pygame.draw.rect(surface, outline_color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w), width=3)
 
-    # Left socket (blends into the background)
     pygame.draw.rect(surface, bg_color, (x - 8, y - height // 2 - 16, 20, 32))
     pygame.draw.line(surface, (255, 255, 255), (x - 8, y - height // 2 - 16), (x - 8, y - height // 2 + 16), 3)
     pygame.draw.line(surface, (255, 255, 255), (x + 12, y - height // 2 - 16), (x + 12, y - height // 2 + 16), 3)
 
-    # Bottom socket (blends into the background)
     pygame.draw.rect(surface, bg_color, (x + width // 2 - 16, y - 8, 32, 20))
     pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y - 8), (x + width // 2 + 16, y - 8), 3)
     pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y + 12), (x + width // 2 + 16, y + 12), 3)
 
-    # Add a small highlight line to suggest a puzzle edge.
     pygame.draw.line(surface, (255, 255, 255), (x + 16, y - height + 18), (x + width - 16, y - height + 18), 3)
     pygame.draw.line(surface, (255, 255, 255), (x + 18, y - height + 38), (x + width - 18, y - height + 38), 2)
 
 
 running = True
+exiting_app = False  # True only for a genuine app-close, not puzzle navigation
+
 while running:
     button_texts = ["Sudoku", "Crossword", "Word Search"]
     button_width = 390
@@ -93,7 +126,6 @@ while running:
     x_button_rect = pygame.Rect(20, 20, 58, 58)
     music_button_rect = pygame.Rect(screen.get_width() - 220, 20, 180, 58)
 
-    # Create button rects before handling events so clicks map correctly
     button_rects = []
     temp_y = button_y
     for text in button_texts:
@@ -103,38 +135,55 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+            exiting_app = True
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             if x_button_rect.collidepoint((mx, my)):
                 running = False
+                exiting_app = True
             elif music_button_rect.collidepoint((mx, my)):
-                try:
-                    music_path = os.path.join(os.path.dirname(__file__), 'Music.py')
-                    subprocess.Popen([sys.executable, music_path])
-                except Exception as e:
-                    messagebox.showerror("Music Error", f"Cannot open Music: {e}")
+                # Only launch a new Music window if one isn't already
+                # alive somewhere -- keeps whatever track/volume is
+                # currently playing instead of stacking a duplicate.
+                if not music_already_running():
+                    try:
+                        music_path = os.path.join(os.path.dirname(__file__), 'Music.py')
+                        subprocess.Popen([sys.executable, music_path])
+                    except Exception as e:
+                        messagebox.showerror("Music Error", f"Cannot open Music: {e}")
             else:
-                # detect which button was clicked
                 for t, rect in button_rects:
                     if rect.collidepoint((mx, my)):
+                        launched = False
                         if t == "Sudoku":
                             try:
                                 sudoku_path = os.path.join(os.path.dirname(__file__), 'Sudoku.py')
                                 subprocess.Popen([sys.executable, sudoku_path])
+                                launched = True
                             except Exception as e:
                                 messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
                         elif t == "Crossword":
                             try:
                                 crossword_path = os.path.join(os.path.dirname(__file__), 'Crossword.py')
                                 subprocess.Popen([sys.executable, crossword_path])
+                                launched = True
                             except Exception as e:
                                 messagebox.showerror("Crossword Error", f"Cannot open Crossword: {e}")
                         elif t == "Word Search":
                             try:
                                 word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
                                 subprocess.Popen([sys.executable, word_search_path])
+                                launched = True
                             except Exception as e:
                                 messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
+
+                        # Close this launcher window once a puzzle has
+                        # opened, so exactly one window is ever on
+                        # screen -- no stacked launcher copies. Music
+                        # is untouched here since this is navigation,
+                        # not exiting the app.
+                        if launched:
+                            running = False
 
     screen.fill((255, 255, 255))
 
@@ -154,7 +203,6 @@ while running:
     music_rect = music_surface.get_rect(center=music_button_rect.center)
     screen.blit(music_surface, music_rect)
 
-    # Draw buttons and labels
     for text, button_rect in button_rects:
         shadow_rect = button_rect.move(0, 6)
         pygame.draw.rect(screen, (220, 225, 235), shadow_rect, border_radius=18)
@@ -169,5 +217,9 @@ while running:
 
     pygame.display.flip()
     clock.tick(60)
+
+# Music only gets stopped on a genuine app exit, never on navigation.
+if exiting_app:
+    stop_music_process()
 
 pygame.quit()
