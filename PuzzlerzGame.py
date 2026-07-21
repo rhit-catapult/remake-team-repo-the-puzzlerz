@@ -89,46 +89,50 @@ def focus_music_window():
             pass
 
 
-# Try to load the puzzle-piece image (place your file at project root
-# or in an assets/ subfolder -- the filename below matches the upload
-# exactly, underscores included).
-
 info = pygame.display.Info()
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 pygame.display.set_caption("Puzzlerz Game")
 
-jigsaw_image = None
-_here = os.path.dirname(os.path.abspath(__file__))
-_jigsaw_paths = (
-    os.path.join(_here, "blue_puzzle_piece.png"),
-    os.path.join(_here, "assets", "blue_puzzle_piece.png"),
-    os.path.join(_here, "samples", "blue_puzzle_piece.png"),
-    os.path.join(_here, "samples", "sample_posters", "blue_puzzle_piece.png"),
-)
-for _p in _jigsaw_paths:
-    if os.path.exists(_p):
-        try:
-            jigsaw_image = pygame.image.load(_p).convert_alpha()
-            break
-        except Exception as e:
-            print(f"Failed to load jigsaw image from {_p}: {e}")
-            jigsaw_image = None
-if jigsaw_image is None:
-    print("No puzzle-piece image found. Checked:", _jigsaw_paths)
+
+def _load_piece_image(filename):
+    """Look for filename at project root, assets/, samples/, or
+    samples/sample_posters/, anchored to this script's own directory
+    so it works no matter what the current working directory is.
+    Must run AFTER pygame.display.set_mode(), since convert_alpha()
+    needs a display surface to already exist."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidate_paths = (
+        os.path.join(here, filename),
+        os.path.join(here, "assets", filename),
+        os.path.join(here, "samples", filename),
+        os.path.join(here, "samples", "sample_posters", filename),
+    )
+    for p in candidate_paths:
+        if os.path.exists(p):
+            try:
+                return pygame.image.load(p).convert_alpha()
+            except Exception as e:
+                print(f"Failed to load image from {p}: {e}")
+    print(f"No image found for {filename}. Checked:", candidate_paths)
+    return None
+
+
+jigsaw_image_left = _load_piece_image("blue_puzzle_piece.png")
+jigsaw_image_right = _load_piece_image("LavenderPuzzlePiece.png")
 
 clock = pygame.time.Clock()
 title_font = pygame.font.SysFont(None, 170)
 button_font = pygame.font.SysFont(None, 48)
 
 
-def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
+def draw_puzzle_piece(surface, x, y, color, outline_color, image=None, flip=False):
     width, height = 287, 187
     body = pygame.Rect(x, y - height, width, height)
 
-    # If the puzzle-piece image is available, use it (image should
-    # include a transparent background, which the processed file does).
-    if jigsaw_image:
-        img = pygame.transform.smoothscale(jigsaw_image, (width, height))
+    # If a puzzle-piece image is available, use it (image should
+    # include a transparent background, which the processed files do).
+    if image:
+        img = pygame.transform.smoothscale(image, (width, height))
         if flip:
             img = pygame.transform.flip(img, True, False)
         surface.blit(img, (x, y - height))
@@ -238,9 +242,10 @@ while running:
         label_rect = label_surface.get_rect(center=button_rect.center)
         screen.blit(label_surface, label_rect)
 
-    draw_puzzle_piece(screen, 8, screen.get_height() - 12, (72, 144, 240), (30, 70, 140), flip=False)
+    draw_puzzle_piece(screen, 8, screen.get_height() - 12, (72, 144, 240), (30, 70, 140),
+                       image=jigsaw_image_left, flip=False)
     draw_puzzle_piece(screen, screen.get_width() - 301, screen.get_height() - 12, (140, 80, 220), (80, 40, 140),
-                      flip=True)
+                       image=jigsaw_image_right, flip=False)
 
     pygame.display.flip()
     clock.tick(60)
