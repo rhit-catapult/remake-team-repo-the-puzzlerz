@@ -524,6 +524,13 @@ class WordSearchGame:
 
 
     # --------------------------------------------------------------- events
+    def open_launcher(self):
+        try:
+            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+            subprocess.Popen([sys.executable, launcher_path])
+        except Exception:
+            pass
+
     def handle_event(self, event):
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -531,13 +538,6 @@ class WordSearchGame:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             pygame.quit()
             sys.exit()
-
-    def open_launcher(self):
-        try:
-            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-            subprocess.Popen([sys.executable, launcher_path])
-        except Exception:
-            pass
 
         if self.state == "MENU":
             if event.type == pygame.MOUSEBUTTONDOWN:
