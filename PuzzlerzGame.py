@@ -89,25 +89,33 @@ def focus_music_window():
             pass
 
 
-# Try to load a jigsaw outline image (place your image at project root or in assets/)
+# Try to load the puzzle-piece image (place your file at project root
+# or in an assets/ subfolder -- the filename below matches the upload
+# exactly, underscores included).
+
+info = pygame.display.Info()
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
+pygame.display.set_caption("Puzzlerz Game")
+
 jigsaw_image = None
+_here = os.path.dirname(os.path.abspath(__file__))
 _jigsaw_paths = (
-    "jigsaw_outline.png",
-    os.path.join("assets", "jigsaw_outline.png"),
-    os.path.join("samples", "jigsaw_outline.png"),
-    os.path.join("samples", "sample_posters", "jigsaw_outline.png"),
+    os.path.join(_here, "blue_puzzle_piece.png"),
+    os.path.join(_here, "assets", "blue_puzzle_piece.png"),
+    os.path.join(_here, "samples", "blue_puzzle_piece.png"),
+    os.path.join(_here, "samples", "sample_posters", "blue_puzzle_piece.png"),
 )
 for _p in _jigsaw_paths:
     if os.path.exists(_p):
         try:
             jigsaw_image = pygame.image.load(_p).convert_alpha()
             break
-        except Exception:
+        except Exception as e:
+            print(f"Failed to load jigsaw image from {_p}: {e}")
             jigsaw_image = None
+if jigsaw_image is None:
+    print("No puzzle-piece image found. Checked:", _jigsaw_paths)
 
-info = pygame.display.Info()
-screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
-pygame.display.set_caption("Puzzlerz Game")
 clock = pygame.time.Clock()
 title_font = pygame.font.SysFont(None, 170)
 button_font = pygame.font.SysFont(None, 48)
@@ -116,43 +124,20 @@ button_font = pygame.font.SysFont(None, 48)
 def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
     width, height = 172, 112
     body = pygame.Rect(x, y - height, width, height)
-    shadow = body.move(6, 6)
-    pygame.draw.rect(surface, (206, 216, 232), shadow, border_radius=26)
 
-    # If a jigsaw outline image is available, use it (image should include transparent background)
+    # If the puzzle-piece image is available, use it (image should
+    # include a transparent background, which the processed file does).
     if jigsaw_image:
-        pygame.draw.rect(surface, color, body, border_radius=22)
         img = pygame.transform.smoothscale(jigsaw_image, (width, height))
         if flip:
             img = pygame.transform.flip(img, True, False)
         surface.blit(img, (x, y - height))
-        pygame.draw.rect(surface, outline_color, body, width=2, border_radius=22)
         return
 
-    # Fallback: draw a more literal jigsaw piece with a protruding tab and a square-edged socket.
-    bg_color = (255, 255, 255)
-    tab_w = 42
-    tab_h = 28
-
+    # Fallback: if the image isn't found, draw a simple placeholder
+    # rounded rect so the corner isn't left completely blank.
     pygame.draw.rect(surface, color, body, border_radius=22)
-    pygame.draw.rect(surface, outline_color, (x + 2, y - height + 2, width - 4, height - 4), width=3, border_radius=18)
-
-    pygame.draw.rect(surface, color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h))
-    pygame.draw.rect(surface, outline_color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h), width=3)
-
-    pygame.draw.rect(surface, color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w))
-    pygame.draw.rect(surface, outline_color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w), width=3)
-
-    pygame.draw.rect(surface, bg_color, (x - 8, y - height // 2 - 16, 20, 32))
-    pygame.draw.line(surface, (255, 255, 255), (x - 8, y - height // 2 - 16), (x - 8, y - height // 2 + 16), 3)
-    pygame.draw.line(surface, (255, 255, 255), (x + 12, y - height // 2 - 16), (x + 12, y - height // 2 + 16), 3)
-
-    pygame.draw.rect(surface, bg_color, (x + width // 2 - 16, y - 8, 32, 20))
-    pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y - 8), (x + width // 2 + 16, y - 8), 3)
-    pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y + 12), (x + width // 2 + 16, y + 12), 3)
-
-    pygame.draw.line(surface, (255, 255, 255), (x + 16, y - height + 18), (x + width - 16, y - height + 18), 3)
-    pygame.draw.line(surface, (255, 255, 255), (x + 18, y - height + 38), (x + width - 18, y - height + 38), 2)
+    pygame.draw.rect(surface, outline_color, body, width=2, border_radius=22)
 
 
 running = True
