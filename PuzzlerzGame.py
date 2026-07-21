@@ -91,6 +91,7 @@ while running:
     button_border = (70, 90, 160)
     button_text_color = (25, 35, 85)
     x_button_rect = pygame.Rect(20, 20, 58, 58)
+    music_button_rect = pygame.Rect(screen.get_width() // 2 - 120, screen.get_height() - 120, 240, 60)
 
     # Create button rects before handling events so clicks map correctly
     button_rects = []
@@ -106,6 +107,12 @@ while running:
             mx, my = event.pos
             if x_button_rect.collidepoint((mx, my)):
                 running = False
+            elif music_button_rect.collidepoint((mx, my)):
+                try:
+                    music_path = os.path.join(os.path.dirname(__file__), 'Music.py')
+                    subprocess.Popen([sys.executable, music_path])
+                except Exception as e:
+                    messagebox.showerror("Music Error", f"Cannot open Music: {e}")
             else:
                 # detect which button was clicked
                 for t, rect in button_rects:
@@ -141,6 +148,12 @@ while running:
     x_surface = button_font.render("X", True, (255, 255, 255))
     x_rect = x_surface.get_rect(center=x_button_rect.center)
     screen.blit(x_surface, x_rect)
+
+    pygame.draw.rect(screen, (130, 140, 150), music_button_rect, border_radius=18)
+    pygame.draw.rect(screen, (80, 90, 100), music_button_rect, width=3, border_radius=18)
+    music_surface = button_font.render("Music", True, (255, 255, 255))
+    music_rect = music_surface.get_rect(center=music_button_rect.center)
+    screen.blit(music_surface, music_rect)
 
     # Draw buttons and labels
     for text, button_rect in button_rects:
