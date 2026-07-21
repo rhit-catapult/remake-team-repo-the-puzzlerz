@@ -47,68 +47,55 @@ def stop_music_process():
         pass
 
 
-# Try to load a jigsaw outline image (place your image at project root or in assets/)
-jigsaw_image = None
-_jigsaw_paths = (
-    "jigsaw_outline.png",
-    os.path.join("assets", "jigsaw_outline.png"),
-    os.path.join("samples", "jigsaw_outline.png"),
-    os.path.join("samples", "sample_posters", "jigsaw_outline.png"),
-)
-for _p in _jigsaw_paths:
-    if os.path.exists(_p):
+def focus_music_window():
+    """Bring the already-running Music window to the front, restoring
+    it if minimized. This is platform-specific since there's no
+    cross-process 'focus that window' API in pygame -- each branch
+    fails silently if the needed tool isn't available."""
+    if sys.platform.startswith("win"):
         try:
-            jigsaw_image = pygame.image.load(_p).convert_alpha()
-            break
+            import ctypes
+            user32 = ctypes.windll.user32
+            hwnd = user32.FindWindowW(None, "Music")
+            if hwnd:
+                SW_RESTORE = 9
+                user32.ShowWindow(hwnd, SW_RESTORE)
+                user32.SetForegroundWindow(hwnd)
         except Exception:
-            jigsaw_image = None
+            pass
+    elif sys.platform.startswith("linux"):
+        # Requires wmctrl (common on most desktop Linux distros).
+        try:
+            subprocess.Popen(["wmctrl", "-a", "Music"])
+        except Exception:
+            pass
+    elif sys.platform == "darwin":
+        # Best-effort: ask System Events to raise any window titled
+        # "Music" belonging to a Python process.
+        try:
+            script = (
+                'tell application "System Events"\n'
+                '  set procs to processes whose name contains "Python"\n'
+                '  repeat with p in procs\n'
+                '    try\n'
+                '      set frontmost of p to true\n'
+                '      exit repeat\n'
+                '    end try\n'
+                '  end repeat\n'
+                'end tell'
+            )
+            subprocess.Popen(["osascript", "-e", script])
+        except Exception:
+            pass
+
+
+
 info = pygame.display.Info()
 screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 pygame.display.set_caption("Puzzlerz Game")
 clock = pygame.time.Clock()
-title_font = pygame.font.SysFont(None, 120)
+title_font = pygame.font.SysFont(None, 170)
 button_font = pygame.font.SysFont(None, 48)
-
-
-def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
-    width, height = 172, 112
-    body = pygame.Rect(x, y - height, width, height)
-    shadow = body.move(6, 6)
-    pygame.draw.rect(surface, (206, 216, 232), shadow, border_radius=26)
-
-    if jigsaw_image:
-        pygame.draw.rect(surface, color, body, border_radius=22)
-        img = pygame.transform.smoothscale(jigsaw_image, (width, height))
-        if flip:
-            img = pygame.transform.flip(img, True, False)
-        surface.blit(img, (x, y - height))
-        pygame.draw.rect(surface, outline_color, body, width=2, border_radius=22)
-        return
-
-    bg_color = (255, 255, 255)
-    tab_w = 42
-    tab_h = 28
-
-    pygame.draw.rect(surface, color, body, border_radius=22)
-    pygame.draw.rect(surface, outline_color, (x + 2, y - height + 2, width - 4, height - 4), width=3, border_radius=18)
-
-    pygame.draw.rect(surface, color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h))
-    pygame.draw.rect(surface, outline_color, (x + width // 2 - tab_w // 2, y - height - tab_h // 2, tab_w, tab_h), width=3)
-
-    pygame.draw.rect(surface, color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w))
-    pygame.draw.rect(surface, outline_color, (x + width - tab_h // 2, y - height // 2 - tab_w // 2, tab_h, tab_w), width=3)
-
-    pygame.draw.rect(surface, bg_color, (x - 8, y - height // 2 - 16, 20, 32))
-    pygame.draw.line(surface, (255, 255, 255), (x - 8, y - height // 2 - 16), (x - 8, y - height // 2 + 16), 3)
-    pygame.draw.line(surface, (255, 255, 255), (x + 12, y - height // 2 - 16), (x + 12, y - height // 2 + 16), 3)
-
-    pygame.draw.rect(surface, bg_color, (x + width // 2 - 16, y - 8, 32, 20))
-    pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y - 8), (x + width // 2 + 16, y - 8), 3)
-    pygame.draw.line(surface, (255, 255, 255), (x + width // 2 - 16, y + 12), (x + width // 2 + 16, y + 12), 3)
-
-    pygame.draw.line(surface, (255, 255, 255), (x + 16, y - height + 18), (x + width - 16, y - height + 18), 3)
-    pygame.draw.line(surface, (255, 255, 255), (x + 18, y - height + 38), (x + width - 18, y - height + 38), 2)
-
 
 running = True
 exiting_app = False  # True only for a genuine app-close, not puzzle navigation
@@ -142,10 +129,11 @@ while running:
                 running = False
                 exiting_app = True
             elif music_button_rect.collidepoint((mx, my)):
-                # Only launch a new Music window if one isn't already
-                # alive somewhere -- keeps whatever track/volume is
-                # currently playing instead of stacking a duplicate.
-                if not music_already_running():
+                if music_already_running():
+                    # Already playing somewhere -- bring it to the
+                    # front instead of spawning a duplicate track.
+                    focus_music_window()
+                else:
                     try:
                         music_path = os.path.join(os.path.dirname(__file__), 'Music.py')
                         subprocess.Popen([sys.executable, music_path])
@@ -177,18 +165,13 @@ while running:
                             except Exception as e:
                                 messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
 
-                        # Close this launcher window once a puzzle has
-                        # opened, so exactly one window is ever on
-                        # screen -- no stacked launcher copies. Music
-                        # is untouched here since this is navigation,
-                        # not exiting the app.
                         if launched:
                             running = False
 
     screen.fill((255, 255, 255))
 
     title_surface = title_font.render("Puzzlr", True, (0, 170, 170))
-    title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 95))
+    title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 115))
     screen.blit(title_surface, title_rect)
 
     pygame.draw.rect(screen, (220, 20, 20), x_button_rect, border_radius=16)
@@ -212,13 +195,9 @@ while running:
         label_rect = label_surface.get_rect(center=button_rect.center)
         screen.blit(label_surface, label_rect)
 
-    draw_puzzle_piece(screen, 8, screen.get_height() - 12, (72, 144, 240), (30, 70, 140), flip=False)
-    draw_puzzle_piece(screen, screen.get_width() - 186, screen.get_height() - 12, (140, 80, 220), (80, 40, 140), flip=True)
-
     pygame.display.flip()
     clock.tick(60)
 
-# Music only gets stopped on a genuine app exit, never on navigation.
 if exiting_app:
     stop_music_process()
 

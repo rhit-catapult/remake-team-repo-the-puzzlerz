@@ -1,5 +1,6 @@
 import os
 import sys
+import time
 import subprocess
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
@@ -36,8 +37,13 @@ class SudokuPopup:
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # User input grid
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # Original puzzle
 
+        # Timer state
+        self.start_time = time.time()
+        self.timer_visible = True
+
         # Fonts (Arial for UI text, Consolas bold for grid digits -- matches Word Search)
         self.title_font = font.Font(family="Arial", size=26, weight="bold")
+        self.timer_font = font.Font(family="Arial", size=18, weight="bold")
         self.cell_font = font.Font(family="Consolas", size=20, weight="bold")
         if not self.cell_font.actual("family").lower().startswith("consolas"):
             self.cell_font = font.Font(family="Courier New", size=20, weight="bold")
@@ -50,20 +56,17 @@ class SudokuPopup:
         # Create UI
         self.create_ui()
 
+        # Start the recurring timer tick
+        self.tick_timer()
+
     def validate_digit(self, value, action):
         """Validate that only single digits 1-9 are entered"""
-        # action 1 = insert, 0 = delete
         if action == '0':  # Allow deletion
             return True
-
-        # Allow empty string
         if value == '':
             return True
-
-        # Only allow single digit 1-9
         if len(value) == 1 and value.isdigit() and '1' <= value <= '9':
             return True
-
         return False
 
     def create_ui(self):
@@ -71,13 +74,20 @@ class SudokuPopup:
         # Title
         title_label = tk.Label(self.root, text="Sudoku",
                                font=self.title_font, bg=self.bg_color, fg=self.text_color)
-        title_label.pack(pady=20)
+        title_label.pack(pady=(20, 6))
+
+        # Timer label (directly under the title, above the grid)
+        self.timer_var = tk.StringVar(value="00:00")
+        self.timer_label = tk.Label(self.root, textvariable=self.timer_var,
+                                     font=self.timer_font, bg=self.bg_color, fg=self.text_color)
+        self.timer_label.pack(pady=(0, 10))
 
         # Puzzle frame (acts as the thick outer/section border, like the word-search grid outline)
-        puzzle_frame = tk.Frame(self.root, bg=self.thick_line_color,
-                                 highlightbackground=self.panel_border,
-                                 highlightthickness=1)
-        puzzle_frame.pack(pady=20)
+        self.puzzle_frame = tk.Frame(self.root, bg=self.thick_line_color,
+                                      highlightbackground=self.panel_border,
+                                      highlightthickness=1)
+        self.puzzle_frame.pack(pady=20)
+        puzzle_frame = self.puzzle_frame
 
         # Create grid with Entry widgets
         self.cells = {}
@@ -86,22 +96,14 @@ class SudokuPopup:
 
         for row in range(9):
             for col in range(9):
-                # Determine if this is a clue or user input cell
                 is_clue = self.original_puzzle[row][col] != 0
                 cell_bg = self.clue_color if is_clue else self.input_color
 
-                # Determine border thicknesses for each edge
-                # Top: 3px if row 0 or row 3 or row 6, else 1px
                 border_top = 3 if row in [0, 3, 6] else 1
-                # Bottom: 3px if row 2 or row 5 or row 8, else 1px
                 border_bottom = 3 if row in [2, 5, 8] else 1
-                # Left: 3px if col 0 or col 3 or col 6, else 1px
                 border_left = 3 if col in [0, 3, 6] else 1
-                # Right: 3px if col 2 or col 5 or col 8, else 1px
                 border_right = 3 if col in [2, 5, 8] else 1
 
-                # Create container frame to simulate directional borders.
-                # Thick dividers use thick_line_color, thin grid lines use line_color.
                 container = tk.Frame(
                     puzzle_frame,
                     bg=self.thick_line_color if (border_top == 3 or border_left == 3
@@ -114,7 +116,6 @@ class SudokuPopup:
                 container.grid_propagate(False)
                 self.cell_frames[(row, col)] = container
 
-                # Create entry widget inside container with padding as borders
                 entry = tk.Entry(
                     container,
                     font=self.cell_font,
@@ -128,18 +129,14 @@ class SudokuPopup:
                     validatecommand=self.validate_cmd
                 )
 
-                # Place entry with padding simulating borders
                 entry.place(x=border_left, y=border_top, width=44, height=44)
 
-                # Set initial value
                 if self.user_grid[row][col] != 0:
                     entry.insert(0, str(self.user_grid[row][col]))
 
-                # Disable editing for clue cells
                 if is_clue:
                     entry.config(state='readonly', readonlybackground=cell_bg)
                 else:
-                    # Bind validation for empty cells
                     entry.bind('<KeyRelease>', lambda e, r=row, c=col: self.on_cell_change(r, c, e))
 
                 self.cell_entries[(row, col)] = entry
@@ -149,22 +146,22 @@ class SudokuPopup:
         button_frame = tk.Frame(self.root, bg=self.bg_color)
         button_frame.pack(pady=20)
 
-        # New puzzle button
         new_btn = self._make_button(button_frame, "New Puzzle", self.new_puzzle_dialog,
                                      self.button_color, self.button_hover)
         new_btn.pack(side=tk.LEFT, padx=10)
 
-        # Clear button
         clear_btn = self._make_button(button_frame, "Clear Entries", self.clear_entries,
                                        self.button_color, self.button_hover)
         clear_btn.pack(side=tk.LEFT, padx=10)
 
-        # Check button
         check_btn = self._make_button(button_frame, "Check Solution", self.check_solution,
                                        self.button_color, self.button_hover)
         check_btn.pack(side=tk.LEFT, padx=10)
 
-        # Close button
+        self.timer_toggle_btn = self._make_button(button_frame, "Hide Timer", self.toggle_timer,
+                                                    self.button_color, self.button_hover)
+        self.timer_toggle_btn.pack(side=tk.LEFT, padx=10)
+
         close_btn = self._make_button(button_frame, "Close", self.close_window,
                                        self.close_color, self.close_hover)
         close_btn.pack(side=tk.LEFT, padx=10)
@@ -181,6 +178,25 @@ class SudokuPopup:
         btn.bind('<Enter>', lambda e: btn.config(bg=hover_color))
         btn.bind('<Leave>', lambda e: btn.config(bg=color))
         return btn
+
+    # ---------------------------------------------------------------- timer
+    def tick_timer(self):
+        """Recurring 1-second tick that updates the elapsed-time label."""
+        elapsed = int(time.time() - self.start_time)
+        mins, secs = divmod(elapsed, 60)
+        self.timer_var.set(f"{mins:02d}:{secs:02d}")
+        self.root.after(1000, self.tick_timer)
+
+    def toggle_timer(self):
+        """Show/hide the timer label -- the clock keeps running in the
+        background either way, only the display is affected."""
+        self.timer_visible = not self.timer_visible
+        if self.timer_visible:
+            self.timer_label.pack(pady=(0, 10), before=self.puzzle_frame)
+            self.timer_toggle_btn.config(text="Hide Timer")
+        else:
+            self.timer_label.pack_forget()
+            self.timer_toggle_btn.config(text="Show Timer")
 
     def close_window(self):
         """Close the Sudoku window and reopen the main launcher interface."""
@@ -199,7 +215,6 @@ class SudokuPopup:
         dialog.configure(bg=self.bg_color)
         dialog.resizable(False, False)
 
-        # Center the dialog on screen
         dialog.update_idletasks()
         screen_width = dialog.winfo_screenwidth()
         screen_height = dialog.winfo_screenheight()
@@ -209,7 +224,6 @@ class SudokuPopup:
         y = (screen_height - dialog_height) // 2
         dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
 
-        # Center the dialog
         dialog.transient(self.root)
         dialog.grab_set()
 
@@ -218,19 +232,16 @@ class SudokuPopup:
                          bg=self.bg_color, fg=self.text_color)
         label.pack(pady=40)
 
-        # Easy button
         easy_btn = self._make_button(dialog, "Easy (45-54 clues)",
                                       lambda: self.generate_new_puzzle('easy', dialog),
                                       self.button_color, self.button_hover)
         easy_btn.pack(pady=20)
 
-        # Medium button
         medium_btn = self._make_button(dialog, "Medium (30-40 clues)",
                                         lambda: self.generate_new_puzzle('medium', dialog),
                                         self.button_color, self.button_hover)
         medium_btn.pack(pady=20)
 
-        # Hard button
         hard_btn = self._make_button(dialog, "Hard (17-25 clues)",
                                       lambda: self.generate_new_puzzle('hard', dialog),
                                       self.close_color, self.close_hover)
@@ -245,13 +256,14 @@ class SudokuPopup:
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
 
-        # Update all cells
+        # Reset the timer for the new puzzle
+        self.start_time = time.time()
+
         for row in range(9):
             for col in range(9):
                 entry = self.cell_entries[(row, col)]
                 value = self.user_grid[row][col]
 
-                # Clear and set new value
                 entry.config(state='normal')
                 entry.delete(0, tk.END)
 
@@ -262,10 +274,8 @@ class SudokuPopup:
                 if value != 0:
                     entry.insert(0, str(value))
 
-                # Unbind all previous event handlers
                 entry.unbind('<KeyRelease>')
 
-                # Lock clue cells and rebind empty cells
                 if is_clue:
                     entry.config(state='readonly', readonlybackground=cell_bg)
                 else:
@@ -276,7 +286,6 @@ class SudokuPopup:
         entry = self.cell_entries[(row, col)]
         value = entry.get().strip()
 
-        # Update user grid
         if value:
             self.user_grid[row][col] = int(value)
         else:
@@ -286,7 +295,7 @@ class SudokuPopup:
         """Clear all user entries, keep clues"""
         for row in range(9):
             for col in range(9):
-                if self.original_puzzle[row][col] == 0:  # Only clear user-entered cells
+                if self.original_puzzle[row][col] == 0:
                     entry = self.cell_entries[(row, col)]
                     entry.config(state='normal')
                     entry.delete(0, tk.END)
@@ -294,7 +303,6 @@ class SudokuPopup:
 
     def check_solution(self):
         """Check if the current solution is correct"""
-        # Check if all cells are filled
         for row in range(9):
             for col in range(9):
                 if self.user_grid[row][col] == 0:
@@ -315,18 +323,15 @@ class SudokuPopup:
 
     def is_valid_solution(self):
         """Validate the current solution"""
-        # Check rows
         for row in range(9):
             if len(set(self.user_grid[row])) != 9 or 0 in self.user_grid[row]:
                 return False
 
-        # Check columns
         for col in range(9):
             column = [self.user_grid[row][col] for row in range(9)]
             if len(set(column)) != 9 or 0 in column:
                 return False
 
-        # Check 3x3 boxes
         for box_row in range(3):
             for box_col in range(3):
                 box = []
