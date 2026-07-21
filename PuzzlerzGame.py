@@ -122,7 +122,7 @@ button_font = pygame.font.SysFont(None, 48)
 
 
 def draw_puzzle_piece(surface, x, y, color, outline_color, flip=False):
-    width, height = 172, 112
+    width, height = 287, 187
     body = pygame.Rect(x, y - height, width, height)
 
     # If the puzzle-piece image is available, use it (image should
@@ -239,7 +239,8 @@ while running:
         screen.blit(label_surface, label_rect)
 
     draw_puzzle_piece(screen, 8, screen.get_height() - 12, (72, 144, 240), (30, 70, 140), flip=False)
-    draw_puzzle_piece(screen, screen.get_width() - 186, screen.get_height() - 12, (140, 80, 220), (80, 40, 140), flip=True)
+    draw_puzzle_piece(screen, screen.get_width() - 301, screen.get_height() - 12, (140, 80, 220), (80, 40, 140),
+                      flip=True)
 
     pygame.display.flip()
     clock.tick(60)
