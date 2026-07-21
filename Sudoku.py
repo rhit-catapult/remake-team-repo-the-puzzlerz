@@ -267,10 +267,7 @@ class SudokuPopup:
                     return
 
         # Check if solution is valid
-        if self.is_valid_solution():
-            messagebox.showinfo("Success!", "Congratulations! You solved it correctly!")
-        else:
-            messagebox.showerror("Error", "There is an error in the puzzle. Please try again.")
+
 
     def is_valid_solution(self):
         """Validate the current solution"""
