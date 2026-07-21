@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
@@ -268,6 +271,11 @@ class SudokuPopup:
 
         # Check if solution is valid
         if self.is_valid_solution():
+            try:
+                congrats_path = os.path.join(os.path.dirname(__file__), 'CongratsScreen.py')
+                subprocess.Popen([sys.executable, congrats_path])
+            except Exception as e:
+                messagebox.showerror("Congratulations Error", f"Could not open the congratulations screen: {e}")
             messagebox.showinfo("Success!", "Congratulations! You solved it correctly!")
         else:
             messagebox.showerror("Error", "There is an error in the puzzle. Please try again.")

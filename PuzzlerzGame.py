@@ -22,7 +22,8 @@ for _p in _jigsaw_paths:
             break
         except Exception:
             jigsaw_image = None
-screen = pygame.display.set_mode((800, 600))
+info = pygame.display.Info()
+screen = pygame.display.set_mode((info.current_w, info.current_h), pygame.FULLSCREEN)
 pygame.display.set_caption("Puzzlerz Game")
 clock = pygame.time.Clock()
 title_font = pygame.font.SysFont(None, 72)
@@ -89,6 +90,8 @@ while running:
     button_color = (240, 246, 255)
     button_border = (70, 90, 160)
     button_text_color = (25, 35, 85)
+    close_button_rect = pygame.Rect(screen.get_width() - 80, 20, 50, 50)
+    x_button_rect = pygame.Rect(20, 20, 50, 50)
 
     # Create button rects before handling events so clicks map correctly
     button_rects = []
@@ -102,34 +105,51 @@ while running:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
-            # detect which button was clicked
-            for t, rect in button_rects:
-                if rect.collidepoint((mx, my)):
-                    if t == "Sudoku":
-                        # Launch Sudoku popup in a separate Python process to avoid mixing GUI loops
-                        try:
-                            sudoku_path = os.path.join(os.path.dirname(__file__), 'Sudoku.py')
-                            subprocess.Popen([sys.executable, sudoku_path])
-                        except Exception as e:
-                            messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
-                    elif t == "Crossword":
-                        try:
-                            crossword_path = os.path.join(os.path.dirname(__file__), 'Crossword.py')
-                            subprocess.Popen([sys.executable, crossword_path])
-                        except Exception as e:
-                            messagebox.showerror("Crossword Error", f"Cannot open Crossword: {e}")
-                    elif t == "Word Search":
-                        try:
-                            word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
-                            subprocess.Popen([sys.executable, word_search_path])
-                        except Exception as e:
-                            messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
+            if x_button_rect.collidepoint((mx, my)):
+                running = False
+            elif close_button_rect.collidepoint((mx, my)):
+                running = False
+            else:
+                # detect which button was clicked
+                for t, rect in button_rects:
+                    if rect.collidepoint((mx, my)):
+                        if t == "Sudoku":
+                            # Launch Sudoku popup in a separate Python process to avoid mixing GUI loops
+                            try:
+                                sudoku_path = os.path.join(os.path.dirname(__file__), 'Sudoku.py')
+                                subprocess.Popen([sys.executable, sudoku_path])
+                            except Exception as e:
+                                messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
+                        elif t == "Crossword":
+                            try:
+                                crossword_path = os.path.join(os.path.dirname(__file__), 'Crossword.py')
+                                subprocess.Popen([sys.executable, crossword_path])
+                            except Exception as e:
+                                messagebox.showerror("Crossword Error", f"Cannot open Crossword: {e}")
+                        elif t == "Word Search":
+                            try:
+                                word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
+                                subprocess.Popen([sys.executable, word_search_path])
+                            except Exception as e:
+                                messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
 
     screen.fill((255, 255, 255))
 
     title_surface = title_font.render("Puzzlr", True, (40, 40, 100))
     title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 50))
     screen.blit(title_surface, title_rect)
+
+    pygame.draw.rect(screen, (220, 20, 20), x_button_rect, border_radius=16)
+    pygame.draw.rect(screen, (255, 255, 255), x_button_rect, width=3, border_radius=16)
+    x_surface = button_font.render("X", True, (255, 255, 255))
+    x_rect = x_surface.get_rect(center=x_button_rect.center)
+    screen.blit(x_surface, x_rect)
+
+    pygame.draw.rect(screen, (220, 20, 20), close_button_rect, border_radius=16)
+    pygame.draw.rect(screen, (255, 255, 255), close_button_rect, width=3, border_radius=16)
+    close_surface = button_font.render("Close", True, (255, 255, 255))
+    close_rect = close_surface.get_rect(center=close_button_rect.center)
+    screen.blit(close_surface, close_rect)
 
     # Draw buttons and labels
     for text, button_rect in button_rects:
