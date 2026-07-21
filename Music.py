@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import pygame
 
 
@@ -66,6 +69,11 @@ while running:
 
             # Close button
             if close_button_rect.collidepoint((mx, my)):
+                try:
+                    launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
+                    subprocess.Popen([sys.executable, launcher_path])
+                except Exception:
+                    pass
                 running = False
 
             # Volume slider - clicking the track or handle starts dragging
