@@ -8,6 +8,7 @@ import sys
 import tempfile
 import time
 import signal
+from process_utils import launch_detached
 
 # Only init display + font here -- NOT the full pygame.init(), so this
 # process never touches the audio device and can't interrupt whatever
@@ -182,8 +183,9 @@ while running:
                     focus_music_window()
                 else:
                     try:
-                        music_path = os.path.join(os.path.dirname(__file__), 'Music.py')
-                        subprocess.Popen([sys.executable, music_path])
+                        here = os.path.dirname(os.path.abspath(__file__))
+                        music_path = os.path.join(here, 'Music.py')
+                        launch_detached([sys.executable, music_path], cwd=here)
                     except Exception as e:
                         messagebox.showerror("Music Error", f"Cannot open Music: {e}")
             else:
@@ -192,28 +194,43 @@ while running:
                         launched = False
                         if t == "Sudoku":
                             try:
-                                sudoku_path = os.path.join(os.path.dirname(__file__), 'Sudoku.py')
-                                subprocess.Popen([sys.executable, sudoku_path])
+                                here = os.path.dirname(os.path.abspath(__file__))
+                                sudoku_path = os.path.join(here, 'Sudoku.py')
+                                launch_detached([sys.executable, sudoku_path], cwd=here)
                                 launched = True
                             except Exception as e:
                                 messagebox.showerror("Sudoku Error", f"Cannot open Sudoku: {e}")
                         elif t == "Crossword":
                             try:
-                                crossword_path = os.path.join(os.path.dirname(__file__), 'Crossword.py')
-                                subprocess.Popen([sys.executable, crossword_path])
+                                here = os.path.dirname(os.path.abspath(__file__))
+                                crossword_path = os.path.join(here, 'Crossword.py')
+                                launch_detached([sys.executable, crossword_path], cwd=here)
                                 launched = True
                             except Exception as e:
                                 messagebox.showerror("Crossword Error", f"Cannot open Crossword: {e}")
                         elif t == "Word Search":
                             try:
-                                word_search_path = os.path.join(os.path.dirname(__file__), 'Word_Search.py')
-                                subprocess.Popen([sys.executable, word_search_path])
+                                here = os.path.dirname(os.path.abspath(__file__))
+                                word_search_path = os.path.join(here, 'Word_Search.py')
+                                launch_detached([sys.executable, word_search_path], cwd=here)
                                 launched = True
                             except Exception as e:
                                 messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
 
+                        # Close this launcher window once a puzzle has
+                        # opened, so exactly one window is ever on
+                        # screen -- no stacked launcher copies. Music
+                        # is untouched here since this is navigation,
+                        # not exiting the app.
                         if launched:
                             running = False
+
+    # Once running is False we're about to tear the display down --
+    # skip drawing entirely so we never touch a surface that pygame
+    # is in the middle of releasing (this was the "Surface is not
+    # initialized" crash).
+    if not running:
+        continue
 
     screen.fill((255, 255, 255))
 

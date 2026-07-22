@@ -39,6 +39,10 @@ def main():
     screen = pygame.display.set_mode((width, height), pygame.FULLSCREEN)
     pygame.display.set_caption("Congratulations")
     clock = pygame.time.Clock()
+    game_type = os.environ.get("PUZZLER_GAME_TYPE", "")
+    launcher_path = os.environ.get("PUZZLER_LAUNCHER_PATH", "")
+    elapsed_seconds_str = os.environ.get("PUZZLER_ELAPSED_SECONDS", "")
+    show_time = elapsed_seconds_str != ""  # only set when the puzzle's timer was visible
 
     sound_path = os.path.join(os.path.dirname(__file__), "soundreality-airhorn-fx-343682.mp3")
     if os.path.exists(sound_path):
@@ -96,6 +100,17 @@ def main():
         title_surface = title_font.render("YOU WIN!!!", True, (0, 180, 0))
         title_rect = title_surface.get_rect(center=(width // 2, height // 2 - 40))
         screen.blit(title_surface, title_rect)
+
+        if show_time:
+            try:
+                secs = int(float(elapsed_seconds_str))
+                time_str = f"Your time: {secs // 60:02d}:{secs % 60:02d}"
+            except ValueError:
+                time_str = ""
+            if time_str:
+                time_surface = button_font.render(time_str, True, (60, 60, 60))
+                time_rect = time_surface.get_rect(center=(width // 2, height // 2 + 10))
+                screen.blit(time_surface, time_rect)
 
         pygame.draw.rect(screen, (220, 20, 20), close_button, border_radius=16)
         pygame.draw.rect(screen, (255, 255, 255), close_button, width=3, border_radius=16)

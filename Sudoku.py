@@ -5,6 +5,7 @@ import subprocess
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
+from process_utils import launch_detached
 
 
 class SudokuPopup:
@@ -202,10 +203,11 @@ class SudokuPopup:
         """Close the Sudoku window and reopen the main launcher interface."""
         self.root.destroy()
         try:
-            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-            subprocess.Popen([sys.executable, launcher_path])
-        except Exception:
-            pass
+            here = os.path.dirname(os.path.abspath(__file__))
+            launcher_path = os.path.join(here, "PuzzlerzGame.py")
+            launch_detached([sys.executable, launcher_path], cwd=here)
+        except Exception as e:
+            print(f"Failed to relaunch PuzzlerzGame.py: {e}")
 
     def new_puzzle_dialog(self):
         """Show difficulty selection dialog"""
@@ -311,10 +313,14 @@ class SudokuPopup:
 
         if self.is_valid_solution():
             try:
-                congrats_path = os.path.join(os.path.dirname(__file__), 'CongratsScreen.py')
+                here = os.path.dirname(os.path.abspath(__file__))
+                congrats_path = os.path.join(here, 'CongratsScreen.py')
                 env = os.environ.copy()
                 env['PUZZLER_GAME_TYPE'] = 'sudoku'
-                subprocess.Popen([sys.executable, congrats_path], env=env)
+                if self.timer_visible:
+                    elapsed = int(time.time() - self.start_time)
+                    env['PUZZLER_ELAPSED_SECONDS'] = str(elapsed)
+                launch_detached([sys.executable, congrats_path], cwd=here, env=env)
             except Exception as e:
                 messagebox.showerror("Congratulations Error", f"Could not open the congratulations screen: {e}")
             self.root.destroy()

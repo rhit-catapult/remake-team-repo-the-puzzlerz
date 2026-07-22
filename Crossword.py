@@ -40,6 +40,7 @@ import pygame
 import random
 import subprocess
 import sys
+from process_utils import launch_detached
 
 # --------------------------------------------------------------------------
 # Word banks (word, clue) grouped by difficulty
@@ -557,6 +558,7 @@ class CrosswordGame:
                 self.check_flash[(r, c)] = "bad"
         if correct == total:
             self.state = "WON"
+            self.elapsed_ms = pygame.time.get_ticks() - self.start_ticks
             self.set_status("Solved! Great job.", (30, 140, 30))
         else:
             self.set_status(f"{correct}/{total} letters correct so far.", COL_TEXT)
@@ -735,20 +737,34 @@ class CrosswordGame:
 
     # --------------------------------------------------------------- events
     def open_launcher(self):
+        # Release this fullscreen display FIRST, so the new launcher
+        # window isn't fighting this one for exclusive fullscreen
+        # access -- launch_detached also frees the new process from
+        # any parent-killing job object on Windows.
+        pygame.quit()
         try:
-            launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-            subprocess.Popen([sys.executable, launcher_path])
-        except Exception:
-            pass
+            here = os.path.dirname(os.path.abspath(__file__))
+            launcher_path = os.path.join(here, "PuzzlerzGame.py")
+            launch_detached([sys.executable, launcher_path], cwd=here)
+        except Exception as e:
+            print(f"Failed to relaunch PuzzlerzGame.py: {e}")
+        sys.exit()
 
     def open_congrats_screen(self):
         try:
-            congrats_path = os.path.join(os.path.dirname(__file__), "CongratsScreen.py")
+            here = os.path.dirname(os.path.abspath(__file__))
+            congrats_path = os.path.join(here, "CongratsScreen.py")
             env = os.environ.copy()
             env["PUZZLER_GAME_TYPE"] = "crossword"
-            subprocess.Popen([sys.executable, congrats_path], env=env)
-        except Exception:
-            pass
+            if self.show_timer:
+                env["PUZZLER_ELAPSED_SECONDS"] = str(self.elapsed_ms // 1000)
+            launch_detached([sys.executable, congrats_path], cwd=here, env=env)
+        except Exception as e:
+            print(f"Failed to open CongratsScreen.py: {e}")
+        # This crossword window is done -- close it now that the
+        # congrats screen has taken over, matching the original flow.
+        pygame.quit()
+        sys.exit()
 
     def handle_event(self, event):
         if event.type == pygame.QUIT:
@@ -762,8 +778,7 @@ class CrosswordGame:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.btn_close_menu.clicked(event.pos):
                     self.open_launcher()
-                    pygame.quit()
-                    sys.exit()
+
                 for name, btn in self.menu_buttons.items():
                     if btn.clicked(event.pos):
                         self.new_puzzle(name)
@@ -772,8 +787,6 @@ class CrosswordGame:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if self.btn_close.clicked(event.pos):
                 self.open_launcher()
-                pygame.quit()
-                sys.exit()
             if self.btn_menu.clicked(event.pos):
                 self.state = "MENU"
                 return
@@ -784,8 +797,6 @@ class CrosswordGame:
                 self.check_answers()
                 if self.state == "WON":
                     self.open_congrats_screen()
-                    pygame.quit()
-                    sys.exit()
                 return
             if self.btn_reveal.clicked(event.pos):
                 self.reveal()
