@@ -2,13 +2,20 @@ import os
 import signal
 import subprocess
 import sys
-import tempfile
 import pygame
 
+from process_utils import launch_detached, MUSIC_PID_PATH, get_return_path
 
+
+# Only this process is meant to own pygame.mixer/the audio device --
+# every other Puzzlerz screen deliberately avoids the full
+# pygame.init() for that exact reason.
 pygame.init()
 
-MUSIC_PID_PATH = os.path.join(tempfile.gettempdir(), "puzzlerz_music.pid")
+# Fallback target if no return path has ever been recorded, or the
+# recorded one no longer exists.
+_here = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_RETURN_PATH = os.path.join(_here, "PuzzlerzGame.py")
 
 
 def write_pid():
@@ -102,15 +109,20 @@ while running:
             mx, my = event.pos
 
             if close_button_rect.collidepoint((mx, my)):
-                # Return to the main menu WITHOUT killing this process
+                # Read the return target fresh, right now -- this is
+                # what makes Close always send you back to wherever
+                # you most recently were, even if Music was already
+                # running and this window just got refocused rather
+                # than freshly launched from that screen.
+                target_path = get_return_path(DEFAULT_RETURN_PATH)
+                # Return to that screen WITHOUT killing this process
                 # -- the mixer keeps playing in the background. This
                 # is what lets music keep going while you're inside a
                 # puzzle. It only truly stops when the whole app exits.
                 try:
-                    launcher_path = os.path.join(os.path.dirname(__file__), "PuzzlerzGame.py")
-                    subprocess.Popen([sys.executable, launcher_path])
-                except Exception:
-                    pass
+                    launch_detached([sys.executable, target_path], cwd=os.path.dirname(target_path))
+                except Exception as e:
+                    print(f"Failed to return to {target_path}: {e}")
                 pygame.display.iconify()
 
             elif slider_track_rect.inflate(0, 20).collidepoint((mx, my)) or handle_rect.collidepoint((mx, my)):
@@ -150,8 +162,9 @@ while running:
             current_volume = rel_x / slider_width
             pygame.mixer.music.set_volume(current_volume)
 
-    # Refresh the heartbeat roughly once a second so the launcher can
-    # tell this process is still alive, even while minimized.
+    # Refresh the heartbeat roughly once a second so other Puzzlerz
+    # processes can tell this Music window is still alive, even while
+    # minimized.
     now_ms = pygame.time.get_ticks()
     if now_ms - last_heartbeat_ms > 1000:
         write_pid()

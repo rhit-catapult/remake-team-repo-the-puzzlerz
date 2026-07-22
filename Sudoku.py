@@ -5,7 +5,7 @@ import subprocess
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
-from process_utils import launch_detached
+from process_utils import launch_detached, open_or_focus_music
 
 
 class SudokuPopup:
@@ -23,10 +23,13 @@ class SudokuPopup:
         self.thick_line_color = '#787878'
         self.clue_color = '#DCE6FA'      # light blue tint, derived from button blue
         self.input_color = '#FFFFFF'
+        self.error_color = '#F1948A'     # highlight for incorrect/conflicting cells
         self.button_color = '#466EC8'
         self.button_hover = '#5F87E1'
         self.close_color = '#CD4646'
         self.close_hover = '#E15F5F'
+        self.music_color = '#828C96'     # matches the launcher's gray Music button
+        self.music_hover = '#96A0AA'
         self.button_text_color = '#FFFFFF'
 
         self.root.configure(bg=self.bg_color)
@@ -37,6 +40,10 @@ class SudokuPopup:
         self.puzzle = self.generator.generate(self.current_difficulty)
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # User input grid
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # Original puzzle
+
+        # Cells currently highlighted red from the last "Check Solution"
+        # click. Cleared as soon as any cell is edited.
+        self.error_cells = set()
 
         # Timer state
         self.start_time = time.time()
@@ -163,6 +170,10 @@ class SudokuPopup:
                                                     self.button_color, self.button_hover)
         self.timer_toggle_btn.pack(side=tk.LEFT, padx=10)
 
+        music_btn = self._make_button(button_frame, "Music", self.open_music,
+                                       self.music_color, self.music_hover)
+        music_btn.pack(side=tk.LEFT, padx=10)
+
         close_btn = self._make_button(button_frame, "Close", self.close_window,
                                        self.close_color, self.close_hover)
         close_btn.pack(side=tk.LEFT, padx=10)
@@ -208,6 +219,14 @@ class SudokuPopup:
             launch_detached([sys.executable, launcher_path], cwd=here)
         except Exception as e:
             print(f"Failed to relaunch PuzzlerzGame.py: {e}")
+
+    def open_music(self):
+        """Open the Music window, or bring an already-running one to
+        the front instead of spawning a duplicate track."""
+        here = os.path.dirname(os.path.abspath(__file__))
+        caller_path = os.path.abspath(__file__)
+        if not open_or_focus_music(here, caller_path):
+            messagebox.showerror("Music Error", "Cannot open Music -- see console for details.")
 
     def new_puzzle_dialog(self):
         """Show difficulty selection dialog"""
@@ -257,6 +276,7 @@ class SudokuPopup:
         self.puzzle = self.generator.generate(difficulty)
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
+        self.error_cells = set()
 
         # Reset the timer for the new puzzle
         self.start_time = time.time()
@@ -285,6 +305,11 @@ class SudokuPopup:
 
     def on_cell_change(self, row, col, event):
         """Handle cell input changes and update user grid"""
+        # Any edit invalidates the last "Check Solution" highlighting,
+        # since the conflicts that were flagged may no longer apply.
+        if self.error_cells:
+            self.clear_error_highlights()
+
         entry = self.cell_entries[(row, col)]
         value = entry.get().strip()
 
@@ -295,59 +320,127 @@ class SudokuPopup:
 
     def clear_entries(self):
         """Clear all user entries, keep clues"""
+        self.clear_error_highlights()
         for row in range(9):
             for col in range(9):
-                if self.original_puzzle[row][col] == 0:
+                if self.original_puzzle[row][col] == 0:  # Only clear user-entered cells
                     entry = self.cell_entries[(row, col)]
                     entry.config(state='normal')
                     entry.delete(0, tk.END)
                     self.user_grid[row][col] = 0
 
+    # ---------------------------------------------------------- highlighting
+    def normal_cell_color(self, row, col):
+        """The color a cell should show when it isn't flagged as an
+        error -- the clue tint for givens, plain white otherwise."""
+        return self.clue_color if self.original_puzzle[row][col] != 0 else self.input_color
+
+    def set_cell_color(self, row, col, color):
+        """Set a cell's background, accounting for readonly (clue)
+        cells needing 'readonlybackground' instead of 'bg'."""
+        entry = self.cell_entries[(row, col)]
+        if self.original_puzzle[row][col] != 0:
+            entry.config(readonlybackground=color)
+        else:
+            entry.config(bg=color)
+
+    def clear_error_highlights(self):
+        """Revert every currently-highlighted cell back to its normal
+        color and forget the highlight set."""
+        for (r, c) in self.error_cells:
+            self.set_cell_color(r, c, self.normal_cell_color(r, c))
+        self.error_cells = set()
+
+    def find_conflicts(self):
+        """Return the set of (row, col) cells whose value duplicates
+        another cell's value within the same row, column, or 3x3 box.
+        Zeros (empty cells) are ignored. An empty result together with
+        every cell filled means the puzzle is solved correctly."""
+        conflicts = set()
+        grid = self.user_grid
+
+        # Rows
+        for r in range(9):
+            seen = {}
+            for c in range(9):
+                v = grid[r][c]
+                if v == 0:
+                    continue
+                seen.setdefault(v, []).append((r, c))
+            for cells in seen.values():
+                if len(cells) > 1:
+                    conflicts.update(cells)
+
+        # Columns
+        for c in range(9):
+            seen = {}
+            for r in range(9):
+                v = grid[r][c]
+                if v == 0:
+                    continue
+                seen.setdefault(v, []).append((r, c))
+            for cells in seen.values():
+                if len(cells) > 1:
+                    conflicts.update(cells)
+
+        # 3x3 boxes
+        for box_row in range(3):
+            for box_col in range(3):
+                seen = {}
+                for i in range(3):
+                    for j in range(3):
+                        r = box_row * 3 + i
+                        c = box_col * 3 + j
+                        v = grid[r][c]
+                        if v == 0:
+                            continue
+                        seen.setdefault(v, []).append((r, c))
+                for cells in seen.values():
+                    if len(cells) > 1:
+                        conflicts.update(cells)
+
+        return conflicts
+
     def check_solution(self):
-        """Check if the current solution is correct"""
+        """Check if the current solution is correct. Incorrect cells
+        (ones that duplicate another cell's value in their row,
+        column, or box) are highlighted in red rather than just
+        showing a generic error message."""
         for row in range(9):
             for col in range(9):
                 if self.user_grid[row][col] == 0:
                     messagebox.showwarning("Incomplete", "Please fill all cells!")
                     return
 
-        if self.is_valid_solution():
-            try:
-                here = os.path.dirname(os.path.abspath(__file__))
-                congrats_path = os.path.join(here, 'CongratsScreen.py')
-                env = os.environ.copy()
-                env['PUZZLER_GAME_TYPE'] = 'sudoku'
-                if self.timer_visible:
-                    elapsed = int(time.time() - self.start_time)
-                    env['PUZZLER_ELAPSED_SECONDS'] = str(elapsed)
-                launch_detached([sys.executable, congrats_path], cwd=here, env=env)
-            except Exception as e:
-                messagebox.showerror("Congratulations Error", f"Could not open the congratulations screen: {e}")
-            self.root.destroy()
-        else:
-            messagebox.showerror("Error", "There is an error in the puzzle. Please try again.")
+        # Clear any highlights left over from a previous check before
+        # computing and applying the current set.
+        self.clear_error_highlights()
 
-    def is_valid_solution(self):
-        """Validate the current solution"""
-        for row in range(9):
-            if len(set(self.user_grid[row])) != 9 or 0 in self.user_grid[row]:
-                return False
+        conflicts = self.find_conflicts()
 
-        for col in range(9):
-            column = [self.user_grid[row][col] for row in range(9)]
-            if len(set(column)) != 9 or 0 in column:
-                return False
+        if conflicts:
+            self.error_cells = conflicts
+            for (r, c) in conflicts:
+                self.set_cell_color(r, c, self.error_color)
+            messagebox.showerror(
+                "Error",
+                "There is an error in the puzzle. The incorrect cells are highlighted in red."
+            )
+            return
 
-        for box_row in range(3):
-            for box_col in range(3):
-                box = []
-                for i in range(3):
-                    for j in range(3):
-                        box.append(self.user_grid[box_row * 3 + i][box_col * 3 + j])
-                if len(set(box)) != 9 or 0 in box:
-                    return False
-
-        return True
+        # No conflicts and every cell filled -- the puzzle is solved.
+        try:
+            here = os.path.dirname(os.path.abspath(__file__))
+            congrats_path = os.path.join(here, 'CongratsScreen.py')
+            env = os.environ.copy()
+            env['PUZZLER_GAME_TYPE'] = 'sudoku'
+            if self.timer_visible:
+                elapsed = int(time.time() - self.start_time)
+                env['PUZZLER_ELAPSED_SECONDS'] = str(elapsed)
+            launch_detached([sys.executable, congrats_path], cwd=here, env=env)
+        except Exception as e:
+            messagebox.showerror("Congratulations Error", f"Could not open the congratulations screen: {e}")
+        self.root.destroy()
 
 
 # Create and run popup

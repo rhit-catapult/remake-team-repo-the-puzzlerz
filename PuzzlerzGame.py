@@ -8,25 +8,13 @@ import sys
 import tempfile
 import time
 import signal
-from process_utils import launch_detached
+from process_utils import launch_detached, MUSIC_PID_PATH, open_or_focus_music
 
 # Only init display + font here -- NOT the full pygame.init(), so this
 # process never touches the audio device and can't interrupt whatever
 # is currently playing in Music.py.
 pygame.display.init()
 pygame.font.init()
-
-MUSIC_PID_PATH = os.path.join(tempfile.gettempdir(), "puzzlerz_music.pid")
-
-
-def music_already_running():
-    """True if Music.py's heartbeat file was touched recently, meaning
-    a Music process is alive (and playing) somewhere right now."""
-    try:
-        mtime = os.path.getmtime(MUSIC_PID_PATH)
-    except OSError:
-        return False
-    return (time.time() - mtime) < 3
 
 
 def stop_music_process():
@@ -46,48 +34,6 @@ def stop_music_process():
         os.remove(MUSIC_PID_PATH)
     except OSError:
         pass
-
-
-def focus_music_window():
-    """Bring the already-running Music window to the front, restoring
-    it if minimized. This is platform-specific since there's no
-    cross-process 'focus that window' API in pygame -- each branch
-    fails silently if the needed tool isn't available."""
-    if sys.platform.startswith("win"):
-        try:
-            import ctypes
-            user32 = ctypes.windll.user32
-            hwnd = user32.FindWindowW(None, "Music")
-            if hwnd:
-                SW_RESTORE = 9
-                user32.ShowWindow(hwnd, SW_RESTORE)
-                user32.SetForegroundWindow(hwnd)
-        except Exception:
-            pass
-    elif sys.platform.startswith("linux"):
-        # Requires wmctrl (common on most desktop Linux distros).
-        try:
-            subprocess.Popen(["wmctrl", "-a", "Music"])
-        except Exception:
-            pass
-    elif sys.platform == "darwin":
-        # Best-effort: ask System Events to raise any window titled
-        # "Music" belonging to a Python process.
-        try:
-            script = (
-                'tell application "System Events"\n'
-                '  set procs to processes whose name contains "Python"\n'
-                '  repeat with p in procs\n'
-                '    try\n'
-                '      set frontmost of p to true\n'
-                '      exit repeat\n'
-                '    end try\n'
-                '  end repeat\n'
-                'end tell'
-            )
-            subprocess.Popen(["osascript", "-e", script])
-        except Exception:
-            pass
 
 
 info = pygame.display.Info()
@@ -119,9 +65,10 @@ def _load_piece_image(filename):
 
 
 # Six background puzzle-piece accents, scattered around the edges of
-# the screen, plus the blue/lavender pair spread across the bottom.
-# Any that fail to load are simply skipped, so a missing file doesn't
-# crash the game -- it just means one fewer piece appears.
+# the screen, plus the blue/lavender pair placed side-by-side at
+# bottom-center. Any that fail to load are simply skipped, so a
+# missing file doesn't crash the game -- it just means one fewer piece
+# appears.
 _piece_filenames = [
     "BrownPuzzlePiece.png",
     "DarkerbluePuzzlePiece.png",
@@ -215,17 +162,10 @@ while running:
                 running = False
                 exiting_app = True
             elif music_button_rect.collidepoint((mx, my)):
-                if music_already_running():
-                    # Already playing somewhere -- bring it to the
-                    # front instead of spawning a duplicate track.
-                    focus_music_window()
-                else:
-                    try:
-                        here = os.path.dirname(os.path.abspath(__file__))
-                        music_path = os.path.join(here, 'Music.py')
-                        launch_detached([sys.executable, music_path], cwd=here)
-                    except Exception as e:
-                        messagebox.showerror("Music Error", f"Cannot open Music: {e}")
+                here = os.path.dirname(os.path.abspath(__file__))
+                caller_path = os.path.abspath(__file__)
+                if not open_or_focus_music(here, caller_path):
+                    messagebox.showerror("Music Error", "Cannot open Music -- see console for details.")
             else:
                 for t, rect in button_rects:
                     if rect.collidepoint((mx, my)):

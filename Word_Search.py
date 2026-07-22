@@ -41,7 +41,7 @@ import random
 import string
 import subprocess
 import sys
-from process_utils import launch_detached
+from process_utils import launch_detached, open_or_focus_music
 
 # --------------------------------------------------------------------------
 # Word banks by genre
@@ -213,6 +213,8 @@ COL_BUTTON_HOVER = (95, 135, 225)
 COL_BUTTON_TEXT = (255, 255, 255)
 COL_CLOSE = (205, 70, 70)
 COL_CLOSE_HOVER = (225, 95, 95)
+COL_MUSIC = (130, 140, 150)
+COL_MUSIC_HOVER = (150, 160, 170)
 COL_SELECT_DRAG = (255, 210, 90)
 COL_FOUND_STRIKE = (150, 150, 150)
 
@@ -280,11 +282,14 @@ class WordSearchGame:
         self.btn_start = Button((WIDTH // 2 - 120, 520, 240, 55), "Start Puzzle", FONT_LG)
         self.btn_close_menu = Button((WIDTH - 40 - 90, 20, 90, 34), "Close", FONT_MD,
                                       color=COL_CLOSE, hover_color=COL_CLOSE_HOVER)
+        self.btn_music_menu = Button((WIDTH - 40 - 90 - 100, 20, 90, 34), "Music",
+                                      color=COL_MUSIC, hover_color=COL_MUSIC_HOVER)
 
         self.btn_new = Button((0, 0, 150, 36), "New Puzzle")
         self.btn_reveal = Button((0, 0, 110, 36), "Reveal")
         self.btn_timer = Button((0, 0, 130, 36), "Hide Timer")
         self.btn_menu = Button((0, 0, 110, 36), "Menu")
+        self.btn_music = Button((0, 0, 90, 36), "Music", color=COL_MUSIC, hover_color=COL_MUSIC_HOVER)
         self.btn_close = Button((0, 0, 90, 36), "Close", FONT_MD,
                                  color=COL_CLOSE, hover_color=COL_CLOSE_HOVER)
 
@@ -421,6 +426,7 @@ class WordSearchGame:
             screen.blit(hint, hint.get_rect(center=(WIDTH // 2, self.btn_start.rect.bottom + 22)))
 
         self.btn_close_menu.draw(screen)
+        self.btn_music_menu.draw(screen)
 
     def draw_grid(self):
         size = self.gen.grid_size
@@ -506,11 +512,11 @@ class WordSearchGame:
         screen.blit(title, (40, 20))
 
         bx = WIDTH - 40
-        for btn in (self.btn_close, self.btn_menu, self.btn_new, self.btn_reveal, self.btn_timer):
+        for btn in (self.btn_close, self.btn_music, self.btn_menu, self.btn_new, self.btn_reveal, self.btn_timer):
             btn.rect.right = bx
             btn.rect.top = 30
             bx -= btn.rect.width + 10
-        for btn in (self.btn_timer, self.btn_reveal, self.btn_new, self.btn_menu, self.btn_close):
+        for btn in (self.btn_timer, self.btn_reveal, self.btn_new, self.btn_menu, self.btn_music, self.btn_close):
             btn.draw(screen)
 
         if self.status_timer > 0:
@@ -542,6 +548,13 @@ class WordSearchGame:
             print(f"Failed to relaunch PuzzlerzGame.py: {e}")
         sys.exit()
 
+    def open_music(self):
+        """Open the Music window, or bring an already-running one to
+        the front instead of spawning a duplicate track."""
+        here = os.path.dirname(os.path.abspath(__file__))
+        if not open_or_focus_music(here):
+            self.set_status("Could not open Music -- see console for details.", (180, 60, 60))
+
     def open_congrats_screen(self):
         try:
             here = os.path.dirname(os.path.abspath(__file__))
@@ -566,6 +579,9 @@ class WordSearchGame:
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if self.btn_close_menu.clicked(event.pos):
                     self.open_launcher()
+                if self.btn_music_menu.clicked(event.pos):
+                    self.open_music()
+                    return
                 for name, btn in self.genre_buttons.items():
                     if btn.clicked(event.pos):
                         self.genre = name
@@ -581,6 +597,9 @@ class WordSearchGame:
                 self.open_launcher()
             if self.btn_menu.clicked(event.pos):
                 self.state = "MENU"
+                return
+            if self.btn_music.clicked(event.pos):
+                self.open_music()
                 return
             if self.btn_new.clicked(event.pos):
                 self.new_puzzle()
