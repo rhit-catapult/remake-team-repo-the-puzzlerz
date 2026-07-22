@@ -118,32 +118,70 @@ def _load_piece_image(filename):
     return None
 
 
+# Six background puzzle-piece accents, scattered around the edges of
+# the screen, plus the blue/lavender pair spread across the bottom.
+# Any that fail to load are simply skipped, so a missing file doesn't
+# crash the game -- it just means one fewer piece appears.
+_piece_filenames = [
+    "BrownPuzzlePiece.png",
+    "DarkerbluePuzzlePiece.png",
+    "GreenPuzzlePiece.png",
+    "OrangePuzzlePiece.png",
+    "PinkPuzzlePiece.png",
+    "YellowPuzzlePiece.png",
+]
+piece_images = [img for img in (_load_piece_image(f) for f in _piece_filenames) if img is not None]
+
 jigsaw_image_left = _load_piece_image("blue_puzzle_piece.png")
 jigsaw_image_right = _load_piece_image("LavenderPuzzlePiece.png")
+
+# Each entry: (image, x_fraction, y_fraction, target_width_px,
+# rotation_degrees, alpha). Fractions are of screen width/height, so
+# this scales to any resolution. Positions keep clear of the title and
+# the vertical button column in the center of the screen.
+background_scatter = []
+_scatter_slots = [
+    (0.05, 0.16, 150, -12, 235),
+    (0.93, 0.12, 130, 16, 235),
+    (0.04, 0.50, 140, 10, 235),
+    (0.95, 0.46, 150, -18, 235),
+    (0.08, 0.86, 160, 14, 235),
+    (0.90, 0.84, 140, -9, 235),
+]
+for img, slot in zip(piece_images, _scatter_slots):
+    xf, yf, target_w, angle, alpha = slot
+    background_scatter.append((img, xf, yf, target_w, angle, alpha))
+
+# Blue + lavender pair, matching the same target width/alpha as the
+# other scattered pieces, spread evenly across the bottom of the
+# screen instead of sitting side-by-side at dead center.
+if jigsaw_image_left:
+    background_scatter.append((jigsaw_image_left, 0.32, 0.93, 150, 0, 235))
+if jigsaw_image_right:
+    background_scatter.append((jigsaw_image_right, 0.68, 0.93, 150, 0, 235))
+
+
+def draw_background_pieces(surface):
+    """Draw all scattered puzzle-piece accents as a background layer,
+    behind the title and buttons. Skips silently if no piece images
+    loaded at all."""
+    if not background_scatter:
+        return
+    sw, sh = surface.get_width(), surface.get_height()
+    for img, xf, yf, target_w, angle, alpha in background_scatter:
+        scale = target_w / img.get_width()
+        target_h = max(1, int(img.get_height() * scale))
+        scaled = pygame.transform.smoothscale(img, (target_w, target_h))
+        if angle:
+            scaled = pygame.transform.rotate(scaled, angle)
+        scaled.set_alpha(alpha)
+        rect = scaled.get_rect(center=(int(sw * xf), int(sh * yf)))
+        surface.blit(scaled, rect)
+
 
 clock = pygame.time.Clock()
 title_font = pygame.font.SysFont(None, 170)
 button_font = pygame.font.SysFont(None, 48)
-
-
-def draw_puzzle_piece(surface, x, y, color, outline_color, image=None, flip=False):
-    width, height = 287, 187
-    body = pygame.Rect(x, y - height, width, height)
-
-    # If a puzzle-piece image is available, use it (image should
-    # include a transparent background, which the processed files do).
-    if image:
-        img = pygame.transform.smoothscale(image, (width, height))
-        if flip:
-            img = pygame.transform.flip(img, True, False)
-        surface.blit(img, (x, y - height))
-        return
-
-    # Fallback: if the image isn't found, draw a simple placeholder
-    # rounded rect so the corner isn't left completely blank.
-    pygame.draw.rect(surface, color, body, border_radius=22)
-    pygame.draw.rect(surface, outline_color, body, width=2, border_radius=22)
-
 
 running = True
 exiting_app = False  # True only for a genuine app-close, not puzzle navigation
@@ -227,12 +265,15 @@ while running:
 
     # Once running is False we're about to tear the display down --
     # skip drawing entirely so we never touch a surface that pygame
-    # is in the middle of releasing (this was the "Surface is not
-    # initialized" crash).
+    # is in the middle of releasing.
     if not running:
         continue
 
     screen.fill((255, 255, 255))
+
+    # Background accent layer -- drawn first so the title/buttons sit
+    # on top of it.
+    draw_background_pieces(screen)
 
     title_surface = title_font.render("Puzzlr", True, (0, 170, 170))
     title_rect = title_surface.get_rect(center=(screen.get_width() // 2, 115))
@@ -258,11 +299,6 @@ while running:
         label_surface = button_font.render(text, True, button_text_color)
         label_rect = label_surface.get_rect(center=button_rect.center)
         screen.blit(label_surface, label_rect)
-
-    draw_puzzle_piece(screen, 8, screen.get_height() - 12, (72, 144, 240), (30, 70, 140),
-                       image=jigsaw_image_left, flip=False)
-    draw_puzzle_piece(screen, screen.get_width() - 301, screen.get_height() - 12, (140, 80, 220), (80, 40, 140),
-                       image=jigsaw_image_right, flip=False)
 
     pygame.display.flip()
     clock.tick(60)
