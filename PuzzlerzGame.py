@@ -8,8 +8,17 @@ import sys
 import tempfile
 import time
 import signal
-from process_utils import launch_detached, MUSIC_PID_PATH, open_or_focus_music
+from process_utils import (
+    launch_detached,
+    MUSIC_PID_PATH,
+    open_or_focus_music,
+    write_screen_pid,
+    clear_screen_pid,
+)
 
+# This script's own path, used both as our heartbeat's identity and as
+# the fallback target other screens' Close buttons launch/focus.
+THIS_SCRIPT_PATH = os.path.abspath(__file__)
 # Only init display + font here -- NOT the full pygame.init(), so this
 # process never touches the audio device and can't interrupt whatever
 # is currently playing in Music.py.
@@ -132,6 +141,11 @@ button_font = pygame.font.SysFont(None, 48)
 
 running = True
 exiting_app = False  # True only for a genuine app-close, not puzzle navigation
+last_heartbeat_ms = 0
+
+# Announce that the launcher is alive right away, so a puzzle's Close
+# button opened moments from now can already find it.
+write_screen_pid(THIS_SCRIPT_PATH)
 
 while running:
     button_texts = ["Sudoku", "Crossword", "Word Search"]
@@ -195,21 +209,33 @@ while running:
                             except Exception as e:
                                 messagebox.showerror("Word Search Error", f"Cannot open Word Search: {e}")
 
-                        # Close this launcher window once a puzzle has
-                        # opened, so exactly one window is ever on
-                        # screen -- no stacked launcher copies. Music
-                        # is untouched here since this is navigation,
-                        # not exiting the app.
-                        if launched:
-                            running = False
+                                # Keep this launcher process alive in the
+                                # background once a puzzle has opened -- same
+                                # treatment as the Music button just above --
+                                # instead of exiting outright. That puzzle's
+                                # own fullscreen window covers this one, and
+                                # its Close button can now find this launcher
+                                # already running and simply refocus it,
+                                # rather than always spawning (and stacking) a
+                                # brand-new launcher instance.
+                                if launched:
+                                    pygame.display.iconify()
 
-    # Once running is False we're about to tear the display down --
-    # skip drawing entirely so we never touch a surface that pygame
-    # is in the middle of releasing.
-    if not running:
-        continue
+        # Once running is False we're about to tear the display down --
+        # skip drawing entirely so we never touch a surface that pygame
+        # is in the middle of releasing.
+        if not running:
+            continue
 
-    screen.fill((255, 255, 255))
+        # Refresh the heartbeat roughly once a second so a puzzle's Close
+        # button (or Music's) can tell this launcher window is still alive,
+        # even while it's minimized/covered rather than focused.
+        now_ms = pygame.time.get_ticks()
+        if now_ms - last_heartbeat_ms > 1000:
+            write_screen_pid(THIS_SCRIPT_PATH)
+            last_heartbeat_ms = now_ms
+
+        screen.fill((255, 255, 255))
 
     # Background accent layer -- drawn first so the title/buttons sit
     # on top of it.
@@ -246,4 +272,5 @@ while running:
 if exiting_app:
     stop_music_process()
 
+clear_screen_pid(THIS_SCRIPT_PATH)
 pygame.quit()

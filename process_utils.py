@@ -11,6 +11,15 @@ Shared helpers for the Puzzlerz scripts:
    button always send you back to whichever screen you were actually
    on, even if Music was already running and simply got refocused
    rather than freshly launched.
+4. write_screen_pid(...) / clear_screen_pid(...) / screen_already_running(...)
+   / focus_window(...) / open_or_focus_screen(...) -- the same
+   "reuse the running window instead of spawning a duplicate" pattern
+   as #2, generalized to ANY screen (the launcher, Sudoku, Crossword,
+   Word Search, ...). This is what lets a puzzle's Close button return
+   to an already-open launcher window instead of always spawning a
+   fresh one, and what lets Music's Close button return to an
+   already-open puzzle window (keeping that puzzle's in-progress state
+   intact) instead of relaunching -- and losing -- it.
 """
 
 import os
@@ -21,6 +30,34 @@ import time
 
 MUSIC_PID_PATH = os.path.join(tempfile.gettempdir(), "puzzlerz_music.pid")
 RETURN_PATH_FILE = os.path.join(tempfile.gettempdir(), "puzzlerz_return_path.txt")
+
+# Window titles for the screens that participate in the generic
+# already-running/focus mechanism, keyed by script basename (lowercase).
+# Used so that anything holding just a script path (e.g. the return
+# path recorded by Music) can find the right window title to look for.
+SCREEN_TITLES = {
+    "puzzlerzgame.py": "Puzzlerz Game",
+    "sudoku.py": "Sudoku",
+    "crossword.py": "Crossword Generator",
+    "word_search.py": "Word Search Generator",
+}
+
+
+def screen_title_for_path(script_path, default="Puzzlerz Game"):
+    """Look up the window title that corresponds to a given screen's
+    script path, falling back to `default` (the launcher's title) for
+    anything not in SCREEN_TITLES."""
+    name = os.path.basename(script_path).lower()
+    return SCREEN_TITLES.get(name, default)
+
+
+def _screen_pid_path(script_path):
+    """Heartbeat-file path for a given screen, one per script so every
+    screen (launcher, Sudoku, Crossword, Word Search, ...) gets its
+    own independent liveness signal -- same idea as MUSIC_PID_PATH,
+    generalized by script name."""
+    name = os.path.splitext(os.path.basename(script_path))[0].lower()
+    return os.path.join(tempfile.gettempdir(), f"puzzlerz_{name}_screen.pid")
 
 
 def launch_detached(args, cwd=None, env=None):
@@ -63,16 +100,19 @@ def music_already_running():
     return (time.time() - mtime) < 3
 
 
-def focus_music_window():
-    """Bring the already-running Music window to the front, restoring
-    it if minimized. This is platform-specific since there's no
-    cross-process 'focus that window' API in pygame -- each branch
-    fails silently if the needed tool isn't available."""
+def focus_window(title):
+    """Bring an already-running window with the given title to the
+    front, restoring it if minimized. This is platform-specific since
+    there's no cross-process 'focus that window' API in pygame/tkinter
+    -- each branch fails silently if the needed tool isn't available.
+    Generalized from the old Music-only version so any screen
+    (launcher, Sudoku, Crossword, Word Search, Music, ...) can be
+    focused by its own window title."""
     if sys.platform.startswith("win"):
         try:
             import ctypes
             user32 = ctypes.windll.user32
-            hwnd = user32.FindWindowW(None, "Music")
+            hwnd = user32.FindWindowW(None, title)
             if hwnd:
                 SW_RESTORE = 9
                 user32.ShowWindow(hwnd, SW_RESTORE)
@@ -82,12 +122,12 @@ def focus_music_window():
     elif sys.platform.startswith("linux"):
         # Requires wmctrl (common on most desktop Linux distros).
         try:
-            subprocess.Popen(["wmctrl", "-a", "Music"])
+            subprocess.Popen(["wmctrl", "-a", title])
         except Exception:
             pass
     elif sys.platform == "darwin":
         # Best-effort: ask System Events to raise any window titled
-        # "Music" belonging to a Python process.
+        # `title` belonging to a Python process.
         try:
             script = (
                 'tell application "System Events"\n'
@@ -103,6 +143,80 @@ def focus_music_window():
             subprocess.Popen(["osascript", "-e", script])
         except Exception:
             pass
+
+
+def focus_music_window():
+    """Bring the already-running Music window to the front. Kept as a
+    thin wrapper around focus_window() for backward compatibility with
+    existing callers."""
+    focus_window("Music")
+
+
+def write_screen_pid(script_path):
+    """Record/refresh this screen's PID + a fresh timestamp, so other
+    Puzzlerz processes (another screen's Close button, Music's Close
+    button, ...) can tell this window is still alive somewhere --
+    even while it's minimized/iconified/behind another fullscreen
+    window rather than focused. Call this once at startup and then
+    periodically (e.g. once a second) from the screen's own event/
+    redraw loop, mirroring how Music.py heartbeats its own PID."""
+    try:
+        with open(_screen_pid_path(script_path), "w") as f:
+            f.write(str(os.getpid()))
+    except OSError:
+        pass
+
+
+def clear_screen_pid(script_path):
+    """Remove this screen's heartbeat file. Call this ONLY on a
+    genuine close -- the window is actually being destroyed/the
+    process is actually exiting -- never when merely navigating away
+    to Music or another screen, since that would make this screen
+    look 'closed' to anything trying to focus it back."""
+    path = _screen_pid_path(script_path)
+    try:
+        if os.path.exists(path):
+            with open(path) as f:
+                existing = f.read().strip()
+            if existing == str(os.getpid()):
+                os.remove(path)
+    except OSError:
+        pass
+
+
+def screen_already_running(script_path):
+    """True if the given screen's heartbeat file was touched recently,
+    meaning that screen is alive somewhere right now (possibly
+    minimized or covered by another fullscreen window)."""
+    try:
+        mtime = os.path.getmtime(_screen_pid_path(script_path))
+    except OSError:
+        return False
+    return (time.time() - mtime) < 3
+
+
+def open_or_focus_screen(script_path, title, here, env=None):
+    """Generic version of open_or_focus_music: bring an already-
+    running screen (the launcher, Sudoku, Crossword, Word Search, ...)
+    to the front if it's alive somewhere, instead of spawning a
+    duplicate that would either stack an extra window or -- worse --
+    replace a screen that had in-progress, unsaved state (like a
+    half-solved Sudoku grid) with a freshly reloaded one. Only
+    launches a brand-new instance if nothing is currently running.
+
+    Returns True if an action was taken (focused or launched), False
+    if launching failed -- details are printed to the console in that
+    case rather than raising, so callers can decide whether to also
+    show their own UI-specific error dialog."""
+    if screen_already_running(script_path):
+        focus_window(title)
+        return True
+    try:
+        launch_detached([sys.executable, script_path], cwd=here, env=env)
+        return True
+    except Exception as e:
+        print(f"Failed to open {script_path}: {e}")
+        return False
 
 
 def set_return_path(caller_path):

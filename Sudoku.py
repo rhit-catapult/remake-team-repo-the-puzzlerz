@@ -5,8 +5,15 @@ import subprocess
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
 from sudoku_gen import SudokuGen
-from process_utils import launch_detached, open_or_focus_music
+from process_utils import (
+    launch_detached,
+    open_or_focus_music,
+    open_or_focus_screen,
+    write_screen_pid,
+    clear_screen_pid,
+)
 
+THIS_SCRIPT_PATH = os.path.abspath(__file__)
 
 class SudokuPopup:
     def __init__(self, root):
@@ -61,6 +68,10 @@ class SudokuPopup:
         self.validate_cmd = (self.root.register(self.validate_digit), '%P', '%d')
         self.root.protocol("WM_DELETE_WINDOW", self.close_window)
 
+        # Announce that this Sudoku window is alive, so Music's Close
+        # button (or another screen's) can find and refocus it later
+        # instead of relaunching a fresh, unsolved puzzle.
+        write_screen_pid(THIS_SCRIPT_PATH)
         # Create UI
         self.create_ui()
 
@@ -193,10 +204,12 @@ class SudokuPopup:
 
     # ---------------------------------------------------------------- timer
     def tick_timer(self):
-        """Recurring 1-second tick that updates the elapsed-time label."""
+        """Recurring 1-second tick that updates the elapsed-time label
+        and refreshes this screen's alive-heartbeat."""
         elapsed = int(time.time() - self.start_time)
         mins, secs = divmod(elapsed, 60)
         self.timer_var.set(f"{mins:02d}:{secs:02d}")
+        write_screen_pid(THIS_SCRIPT_PATH)
         self.root.after(1000, self.tick_timer)
 
     def toggle_timer(self):
@@ -211,15 +224,15 @@ class SudokuPopup:
             self.timer_toggle_btn.config(text="Show Timer")
 
     def close_window(self):
-        """Close the Sudoku window and reopen the main launcher interface."""
+        """Close the Sudoku window and return to the main launcher --
+        reusing an already-running launcher window if there is one,
+        instead of always spawning (and stacking) a fresh instance."""
+        clear_screen_pid(THIS_SCRIPT_PATH)
         self.root.destroy()
-        try:
-            here = os.path.dirname(os.path.abspath(__file__))
-            launcher_path = os.path.join(here, "PuzzlerzGame.py")
-            launch_detached([sys.executable, launcher_path], cwd=here)
-        except Exception as e:
-            print(f"Failed to relaunch PuzzlerzGame.py: {e}")
-
+        here = os.path.dirname(os.path.abspath(__file__))
+        launcher_path = os.path.join(here, "PuzzlerzGame.py")
+        if not open_or_focus_screen(launcher_path, "Puzzlerz Game", here):
+            print("Failed to return to PuzzlerzGame.py -- see console for details.")
     def open_music(self):
         """Open the Music window, or bring an already-running one to
         the front instead of spawning a duplicate track."""
@@ -440,6 +453,7 @@ class SudokuPopup:
             launch_detached([sys.executable, congrats_path], cwd=here, env=env)
         except Exception as e:
             messagebox.showerror("Congratulations Error", f"Could not open the congratulations screen: {e}")
+        clear_screen_pid(THIS_SCRIPT_PATH)
         self.root.destroy()
 
 

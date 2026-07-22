@@ -4,8 +4,13 @@ import subprocess
 import sys
 import pygame
 
-from process_utils import launch_detached, MUSIC_PID_PATH, get_return_path
-
+from process_utils import (
+    launch_detached,
+    MUSIC_PID_PATH,
+    get_return_path,
+    open_or_focus_screen,
+    screen_title_for_path,
+)
 
 # Only this process is meant to own pygame.mixer/the audio device --
 # every other Puzzlerz screen deliberately avoids the full
@@ -119,10 +124,18 @@ while running:
                 # -- the mixer keeps playing in the background. This
                 # is what lets music keep going while you're inside a
                 # puzzle. It only truly stops when the whole app exits.
-                try:
-                    launch_detached([sys.executable, target_path], cwd=os.path.dirname(target_path))
-                except Exception as e:
-                    print(f"Failed to return to {target_path}: {e}")
+                #
+                # That screen was never actually closed when it opened
+                # Music (it just lost focus behind this fullscreen
+                # window), so it's almost always still running with
+                # its state intact -- e.g. a half-solved Sudoku grid.
+                # open_or_focus_screen() checks for that and simply
+                # refocuses it instead of launching a fresh instance,
+                # which would otherwise silently discard that state.
+                # Launching fresh is only a fallback for the rare case
+                # where the screen genuinely isn't running anymore.
+                target_title = screen_title_for_path(target_path)
+                open_or_focus_screen(target_path, target_title, os.path.dirname(target_path))
                 pygame.display.iconify()
 
             elif slider_track_rect.inflate(0, 20).collidepoint((mx, my)) or handle_rect.collidepoint((mx, my)):

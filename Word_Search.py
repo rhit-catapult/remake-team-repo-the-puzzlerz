@@ -41,8 +41,15 @@ import random
 import string
 import subprocess
 import sys
-from process_utils import launch_detached, open_or_focus_music
+from process_utils import (
+    launch_detached,
+    open_or_focus_music,
+    open_or_focus_screen,
+    write_screen_pid,
+    clear_screen_pid,
+)
 
+THIS_SCRIPT_PATH = os.path.abspath(__file__)
 # --------------------------------------------------------------------------
 # Word banks by genre
 # --------------------------------------------------------------------------
@@ -194,6 +201,12 @@ info = pygame.display.Info()
 WIDTH, HEIGHT = info.current_w, info.current_h
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
 clock = pygame.time.Clock()
+
+# Announce that this Word Search window is alive, so Music's Close
+# button (or another screen's) can find and refocus it later instead
+# of relaunching a fresh, unsolved puzzle.
+write_screen_pid(THIS_SCRIPT_PATH)
+_last_heartbeat_ms = 0
 
 FONT_SM = pygame.font.SysFont("arial", 15)
 FONT_MD = pygame.font.SysFont("arial", 18)
@@ -379,6 +392,7 @@ class WordSearchGame:
                     self.elapsed_ms = pygame.time.get_ticks() - self.start_ticks
                     self.set_status("All words found!", (30, 130, 30))
                     self.open_congrats_screen()
+                    clear_screen_pid(THIS_SCRIPT_PATH)
                     pygame.quit()
                     sys.exit()
                 return
@@ -535,24 +549,27 @@ class WordSearchGame:
 
     # --------------------------------------------------------------- events
     def open_launcher(self):
-        # Release this fullscreen display FIRST, so the new launcher
-        # window isn't fighting this one for exclusive fullscreen
-        # access -- launch_detached also frees the new process from
-        # any parent-killing job object on Windows.
+        # This screen is genuinely closing -- clear its heartbeat so
+        # nothing later mistakes it for still being open.
+        clear_screen_pid(THIS_SCRIPT_PATH)
+        here = os.path.dirname(os.path.abspath(__file__))
+        launcher_path = os.path.join(here, "PuzzlerzGame.py")
+        # Release this fullscreen display FIRST, so an already-running
+        # launcher window (or a freshly launched one) isn't fighting
+        # this one for exclusive fullscreen access.
         pygame.quit()
-        try:
-            here = os.path.dirname(os.path.abspath(__file__))
-            launcher_path = os.path.join(here, "PuzzlerzGame.py")
-            launch_detached([sys.executable, launcher_path], cwd=here)
-        except Exception as e:
-            print(f"Failed to relaunch PuzzlerzGame.py: {e}")
+        # Reuse an already-running launcher window if there is one,
+        # instead of always spawning (and stacking) a fresh instance.
+        if not open_or_focus_screen(launcher_path, "Puzzlerz Game", here):
+            print("Failed to return to PuzzlerzGame.py -- see console for details.")
         sys.exit()
 
     def open_music(self):
         """Open the Music window, or bring an already-running one to
         the front instead of spawning a duplicate track."""
         here = os.path.dirname(os.path.abspath(__file__))
-        if not open_or_focus_music(here):
+        caller_path = os.path.abspath(__file__)
+        if not open_or_focus_music(here, caller_path):
             self.set_status("Could not open Music -- see console for details.", (180, 60, 60))
 
     def open_congrats_screen(self):
@@ -569,9 +586,11 @@ class WordSearchGame:
 
     def handle_event(self, event):
         if event.type == pygame.QUIT:
+            clear_screen_pid(THIS_SCRIPT_PATH)
             pygame.quit()
             sys.exit()
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            clear_screen_pid(THIS_SCRIPT_PATH)
             pygame.quit()
             sys.exit()
 
@@ -636,12 +655,22 @@ class WordSearchGame:
 
 
 def main():
+    global _last_heartbeat_ms
     game = WordSearchGame()
     while True:
         for event in pygame.event.get():
             game.handle_event(event)
         game.draw()
         pygame.display.flip()
+
+        # Refresh the heartbeat roughly once a second so Music's (or
+        # another screen's) Close button can tell this window is still
+        # alive, even while it's covered by another fullscreen window.
+        now_ms = pygame.time.get_ticks()
+        if now_ms - _last_heartbeat_ms > 1000:
+            write_screen_pid(THIS_SCRIPT_PATH)
+            _last_heartbeat_ms = now_ms
+
         clock.tick(30)
 
 
