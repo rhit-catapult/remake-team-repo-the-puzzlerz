@@ -15,6 +15,7 @@ from process_utils import (
 
 THIS_SCRIPT_PATH = os.path.abspath(__file__)
 
+
 class SudokuPopup:
     def __init__(self, root):
         self.root = root
@@ -37,6 +38,10 @@ class SudokuPopup:
         self.close_hover = '#E15F5F'
         self.music_color = '#828C96'     # matches the launcher's gray Music button
         self.music_hover = '#96A0AA'
+        self.notes_off_color = '#466EC8'  # same as the standard button color
+        self.notes_off_hover = '#5F87E1'
+        self.notes_on_color = '#3B9C6D'   # green while notes mode is active
+        self.notes_on_hover = '#4CB57F'
         self.button_text_color = '#FFFFFF'
 
         self.root.configure(bg=self.bg_color)
@@ -52,6 +57,13 @@ class SudokuPopup:
         # click. Cleared as soon as any cell is edited.
         self.error_cells = set()
 
+        # Pencil-mark notes: small candidate digits the player can jot
+        # in a cell without them counting as the actual answer. Keyed
+        # by (row, col) -> a set of single-character digit strings.
+        # Purely a player aid -- never touched by check_solution().
+        self.notes = {(r, c): set() for r in range(9) for c in range(9)}
+        self.notes_mode = False
+
         # Timer state
         self.start_time = time.time()
         self.timer_visible = True
@@ -63,6 +75,7 @@ class SudokuPopup:
         if not self.cell_font.actual("family").lower().startswith("consolas"):
             self.cell_font = font.Font(family="Courier New", size=20, weight="bold")
         self.button_font = font.Font(family="Arial", size=12)
+        self.notes_font = font.Font(family="Arial", size=7)
 
         # Register validation command
         self.validate_cmd = (self.root.register(self.validate_digit), '%P', '%d')
@@ -72,6 +85,7 @@ class SudokuPopup:
         # button (or another screen's) can find and refocus it later
         # instead of relaunching a fresh, unsolved puzzle.
         write_screen_pid(THIS_SCRIPT_PATH)
+
         # Create UI
         self.create_ui()
 
@@ -112,6 +126,8 @@ class SudokuPopup:
         self.cells = {}
         self.cell_entries = {}
         self.cell_frames = {}
+        self.note_frames = {}
+        self.note_mini_labels = {}
 
         for row in range(9):
             for col in range(9):
@@ -153,13 +169,55 @@ class SudokuPopup:
                 if self.user_grid[row][col] != 0:
                     entry.insert(0, str(self.user_grid[row][col]))
 
+                # Pencil-mark notes grid: a 3x3 arrangement of tiny
+                # labels, one fixed position per digit (1 top-left ...
+                # 9 bottom-right, like a keypad), covering the same
+                # area as the Entry. It's placed after the Entry (so
+                # stacked above it) but only actually lifted to the
+                # front while the cell is empty -- refresh_note_visibility()
+                # drops it behind the Entry again once a real answer
+                # is typed, so the big answer digit is what's visible.
+                note_frame = tk.Frame(container, bg=cell_bg)
+                note_frame.place(x=border_left, y=border_top, width=44, height=44)
+                note_frame.bind('<Button-1>', lambda e, ent=entry: ent.focus_set())
+                for i in range(3):
+                    note_frame.grid_rowconfigure(i, weight=1, uniform="notes_row")
+                    note_frame.grid_columnconfigure(i, weight=1, uniform="notes_col")
+
+                mini_labels = {}
+                for idx in range(9):
+                    digit = str(idx + 1)
+                    r_idx, c_idx = divmod(idx, 3)
+                    mini_lbl = tk.Label(
+                        note_frame, text="", font=self.notes_font,
+                        bg=cell_bg, fg="#707070"
+                    )
+                    mini_lbl.grid(row=r_idx, column=c_idx, sticky='nsew')
+                    mini_lbl.bind('<Button-1>', lambda e, ent=entry: ent.focus_set())
+                    mini_labels[digit] = mini_lbl
+
+                self.note_frames[(row, col)] = note_frame
+                self.note_mini_labels[(row, col)] = mini_labels
+
                 if is_clue:
                     entry.config(state='readonly', readonlybackground=cell_bg)
                 else:
                     entry.bind('<KeyRelease>', lambda e, r=row, c=col: self.on_cell_change(r, c, e))
+                    entry.bind('<KeyPress>', lambda e, r=row, c=col: self.on_cell_keypress(r, c, e))
+                    # The instant this Entry actually gets focus -- whether
+                    # from a direct click on it, or indirectly via the
+                    # notes grid's click-forwarding above -- bring it to
+                    # the front so its cursor is visible and it's
+                    # unambiguously the widget receiving clicks/keys from
+                    # here on. When focus leaves, hand the decision back
+                    # to refresh_note_visibility (notes reclaim the top
+                    # layer only if the cell is still empty).
+                    entry.bind('<FocusIn>', lambda e, r=row, c=col: self.on_entry_focus_in(r, c))
+                    entry.bind('<FocusOut>', lambda e, r=row, c=col: self.refresh_note_visibility(r, c))
 
                 self.cell_entries[(row, col)] = entry
                 self.cells[(row, col)] = entry
+                self.refresh_note_visibility(row, col)
 
         # Button frame
         button_frame = tk.Frame(self.root, bg=self.bg_color)
@@ -172,6 +230,10 @@ class SudokuPopup:
         clear_btn = self._make_button(button_frame, "Clear Entries", self.clear_entries,
                                        self.button_color, self.button_hover)
         clear_btn.pack(side=tk.LEFT, padx=10)
+
+        self.notes_toggle_btn = self._make_button(button_frame, "Notes: Off", self.toggle_notes_mode,
+                                                    self.notes_off_color, self.notes_off_hover)
+        self.notes_toggle_btn.pack(side=tk.LEFT, padx=10)
 
         check_btn = self._make_button(button_frame, "Check Solution", self.check_solution,
                                        self.button_color, self.button_hover)
@@ -198,8 +260,14 @@ class SudokuPopup:
             relief='flat', bd=0, padx=18, pady=10, cursor='hand2',
             highlightthickness=0
         )
-        btn.bind('<Enter>', lambda e: btn.config(bg=hover_color))
-        btn.bind('<Leave>', lambda e: btn.config(bg=color))
+        # Stored on the widget (rather than only captured in the
+        # lambdas below) so a caller can retint a button later --
+        # e.g. the Notes toggle switching to green while active -- and
+        # have hover/leave still pick up the new colors.
+        btn._base_color = color
+        btn._hover_color = hover_color
+        btn.bind('<Enter>', lambda e: btn.config(bg=btn._hover_color))
+        btn.bind('<Leave>', lambda e: btn.config(bg=btn._base_color))
         return btn
 
     # ---------------------------------------------------------------- timer
@@ -223,6 +291,105 @@ class SudokuPopup:
             self.timer_label.pack_forget()
             self.timer_toggle_btn.config(text="Show Timer")
 
+    # ---------------------------------------------------------------- notes
+    def toggle_notes_mode(self):
+        """Switch between normal entry and pencil-mark notes mode.
+        While notes mode is on, typing a digit into an empty,
+        non-clue cell toggles that digit as a small candidate note
+        instead of filling in the cell's real answer."""
+        self.notes_mode = not self.notes_mode
+        btn = self.notes_toggle_btn
+        if self.notes_mode:
+            btn.config(text="Notes: On", bg=self.notes_on_color)
+            btn._base_color = self.notes_on_color
+            btn._hover_color = self.notes_on_hover
+        else:
+            btn.config(text="Notes: Off", bg=self.notes_off_color)
+            btn._base_color = self.notes_off_color
+            btn._hover_color = self.notes_off_hover
+
+    def on_cell_keypress(self, row, col, event):
+        """Intercept digit keys before they reach the Entry's own
+        insert behavior, so that in notes mode they toggle a small
+        candidate digit instead of changing the cell's real answer.
+        Returning 'break' stops the keystroke from being inserted;
+        returning None lets it proceed exactly as before."""
+        if not self.notes_mode:
+            return None
+
+        if event.keysym in ('BackSpace', 'Delete'):
+            entry = self.cell_entries[(row, col)]
+            if entry.get().strip() == '' and self.notes.get((row, col)):
+                self.notes[(row, col)] = set()
+                self.update_note_label(row, col)
+                self.refresh_note_visibility(row, col)
+            return None
+
+        if event.char and event.char.isdigit() and event.char != '0':
+            entry = self.cell_entries[(row, col)]
+            if entry.get().strip() != '':
+                # This cell already holds a real answer -- notes only
+                # apply to empty cells, so ignore the keystroke rather
+                # than silently overwriting the answer with a note.
+                return "break"
+            self.toggle_note(row, col, event.char)
+            self.refresh_note_visibility(row, col)
+            return "break"
+
+        # Anything else (arrow keys, Tab, ...) behaves as normal.
+        return None
+
+    def toggle_note(self, row, col, digit):
+        """Add or remove a single candidate digit from a cell's notes
+        and refresh its on-screen display."""
+        notes = self.notes.setdefault((row, col), set())
+        if digit in notes:
+            notes.discard(digit)
+        else:
+            notes.add(digit)
+        self.update_note_label(row, col)
+
+    def update_note_label(self, row, col):
+        """Refresh the 3x3 notes mini-grid for one cell to match
+        self.notes -- each digit always shows in the same fixed
+        position (1 top-left ... 9 bottom-right) so marks don't shift
+        around as others are added or removed."""
+        mini_labels = self.note_mini_labels.get((row, col))
+        if mini_labels is None:
+            return
+        digits = self.notes.get((row, col), set())
+        for digit, lbl in mini_labels.items():
+            lbl.config(text=digit if digit in digits else "")
+
+    def on_entry_focus_in(self, row, col):
+        """Called the instant a cell's Entry gains keyboard focus --
+        whether from a direct click on it, or indirectly via the notes
+        grid's click-forwarding (it's on top of an empty cell and
+        hands focus to the Entry without changing the visible layer).
+
+        In normal mode, bring the Entry to the front so its cursor is
+        visible and it's unambiguously what receives clicks/keys from
+        here on -- exactly like before notes existed. In notes mode,
+        leave the notes grid on top instead, so newly toggled pencil
+        marks are visible immediately rather than hidden behind a
+        blank, focused Entry until focus moves elsewhere."""
+        if not self.notes_mode:
+            self.cell_entries[(row, col)].lift()
+
+    def refresh_note_visibility(self, row, col):
+        """Show the pencil-mark mini-grid on top of the Entry only
+        while the cell is empty. Once a real answer is typed, drop the
+        notes grid behind the Entry so the big answer digit is what's
+        actually visible -- the two never need to be seen at once."""
+        note_frame = self.note_frames.get((row, col))
+        if note_frame is None:
+            return
+        entry = self.cell_entries[(row, col)]
+        if entry.get().strip() == '':
+            note_frame.lift()
+        else:
+            note_frame.lower()
+
     def close_window(self):
         """Close the Sudoku window and return to the main launcher --
         reusing an already-running launcher window if there is one,
@@ -233,6 +400,7 @@ class SudokuPopup:
         launcher_path = os.path.join(here, "PuzzlerzGame.py")
         if not open_or_focus_screen(launcher_path, "Puzzlerz Game", here):
             print("Failed to return to PuzzlerzGame.py -- see console for details.")
+
     def open_music(self):
         """Open the Music window, or bring an already-running one to
         the front instead of spawning a duplicate track."""
@@ -290,6 +458,7 @@ class SudokuPopup:
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
         self.error_cells = set()
+        self.notes = {(r, c): set() for r in range(9) for c in range(9)}
 
         # Reset the timer for the new puzzle
         self.start_time = time.time()
@@ -310,11 +479,27 @@ class SudokuPopup:
                     entry.insert(0, str(value))
 
                 entry.unbind('<KeyRelease>')
+                entry.unbind('<KeyPress>')
+                entry.unbind('<FocusIn>')
+                entry.unbind('<FocusOut>')
+
+                # New puzzle, so any leftover pencil marks from the
+                # previous one no longer apply -- clear the display too.
+                note_frame = self.note_frames.get((row, col))
+                if note_frame is not None:
+                    note_frame.config(bg=cell_bg)
+                for lbl in self.note_mini_labels.get((row, col), {}).values():
+                    lbl.config(text="", bg=cell_bg)
 
                 if is_clue:
                     entry.config(state='readonly', readonlybackground=cell_bg)
                 else:
                     entry.bind('<KeyRelease>', lambda e, r=row, c=col: self.on_cell_change(r, c, e))
+                    entry.bind('<KeyPress>', lambda e, r=row, c=col: self.on_cell_keypress(r, c, e))
+                    entry.bind('<FocusIn>', lambda e, r=row, c=col: self.on_entry_focus_in(r, c))
+                    entry.bind('<FocusOut>', lambda e, r=row, c=col: self.refresh_note_visibility(r, c))
+
+                self.refresh_note_visibility(row, col)
 
     def on_cell_change(self, row, col, event):
         """Handle cell input changes and update user grid"""
@@ -328,8 +513,15 @@ class SudokuPopup:
 
         if value:
             self.user_grid[row][col] = int(value)
+            # A real answer makes any pencil-mark notes for this cell
+            # moot -- clear them so they don't linger underneath it.
+            if self.notes.get((row, col)):
+                self.notes[(row, col)] = set()
+                self.update_note_label(row, col)
         else:
             self.user_grid[row][col] = 0
+
+        self.refresh_note_visibility(row, col)
 
     def clear_entries(self):
         """Clear all user entries, keep clues"""
@@ -341,6 +533,9 @@ class SudokuPopup:
                     entry.config(state='normal')
                     entry.delete(0, tk.END)
                     self.user_grid[row][col] = 0
+                    self.notes[(row, col)] = set()
+                    self.update_note_label(row, col)
+                    self.refresh_note_visibility(row, col)
 
     # ---------------------------------------------------------- highlighting
     def normal_cell_color(self, row, col):
@@ -350,12 +545,19 @@ class SudokuPopup:
 
     def set_cell_color(self, row, col, color):
         """Set a cell's background, accounting for readonly (clue)
-        cells needing 'readonlybackground' instead of 'bg'."""
+        cells needing 'readonlybackground' instead of 'bg'. Also keeps
+        the notes mini-grid in sync so a highlighted cell doesn't show
+        a mismatched patch of color behind its pencil marks."""
         entry = self.cell_entries[(row, col)]
         if self.original_puzzle[row][col] != 0:
             entry.config(readonlybackground=color)
         else:
             entry.config(bg=color)
+        note_frame = self.note_frames.get((row, col))
+        if note_frame is not None:
+            note_frame.config(bg=color)
+        for lbl in self.note_mini_labels.get((row, col), {}).values():
+            lbl.config(bg=color)
 
     def clear_error_highlights(self):
         """Revert every currently-highlighted cell back to its normal
