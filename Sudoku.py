@@ -4,6 +4,7 @@ import time
 import subprocess
 import tkinter as tk
 from tkinter import font, messagebox, simpledialog
+from copy import deepcopy
 from sudoku_gen import SudokuGen
 from process_utils import (
     launch_detached,
@@ -52,6 +53,19 @@ class SudokuPopup:
         self.puzzle = self.generator.generate(self.current_difficulty)
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # User input grid
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]  # Original puzzle
+        # The actual filled-in solution for this puzzle. SudokuGen
+        # already builds and verifies a unique solution as part of
+        # generate() and keeps it on self.generator.solution -- snapshot
+        # it (deepcopy, since generate() reuses/mutates that attribute
+        # on the next call) rather than re-solving the puzzle
+        # ourselves. "Check Solution" compares each cell against this.
+        # Falls back to solving it ourselves only if that's ever
+        # missing (shouldn't normally happen).
+        self.solution = (
+            deepcopy(self.generator.solution)
+            if self.generator.solution is not None
+            else self.solve_sudoku(self.original_puzzle)
+        )
 
         # Cells currently highlighted red from the last "Check Solution"
         # click. Cleared as soon as any cell is edited.
@@ -457,6 +471,11 @@ class SudokuPopup:
         self.puzzle = self.generator.generate(difficulty)
         self.original_puzzle = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
         self.user_grid = [[self.puzzle[r][c] for c in range(9)] for r in range(9)]
+        self.solution = (
+            deepcopy(self.generator.solution)
+            if self.generator.solution is not None
+            else self.solve_sudoku(self.original_puzzle)
+        )
         self.error_cells = set()
         self.notes = {(r, c): set() for r in range(9) for c in range(9)}
 
@@ -566,11 +585,70 @@ class SudokuPopup:
             self.set_cell_color(r, c, self.normal_cell_color(r, c))
         self.error_cells = set()
 
+    @staticmethod
+    def solve_sudoku(clue_grid):
+        """Fallback solver, used only if self.generator.solution ever
+        turns out to be missing -- normally sudoku_gen.py's own
+        generate() already builds and verifies a unique solution and
+        hands it back via self.generator.solution, which is what
+        __init__/generate_new_puzzle actually use.
+
+        Solves a Sudoku from its clues alone via plain backtracking
+        with a most-constrained-cell heuristic (picking the
+        emptiest-of-options cell first), which keeps it fast even for
+        low-clue "hard" puzzles. Returns a fully solved 9x9 grid, or
+        None if the clues turned out not to have a solution."""
+        board = [row[:] for row in clue_grid]
+
+        def candidates(r, c):
+            used = set(board[r])
+            used.update(board[i][c] for i in range(9))
+            br, bc = 3 * (r // 3), 3 * (c // 3)
+            used.update(
+                board[br + i][bc + j]
+                for i in range(3) for j in range(3)
+            )
+            return [v for v in range(1, 10) if v not in used]
+
+        def find_best_empty():
+            best_cell = None
+            best_candidates = None
+            for r in range(9):
+                for c in range(9):
+                    if board[r][c] != 0:
+                        continue
+                    opts = candidates(r, c)
+                    if best_candidates is None or len(opts) < len(best_candidates):
+                        best_cell, best_candidates = (r, c), opts
+                        if not opts:
+                            return best_cell, best_candidates
+            return best_cell, best_candidates
+
+        def backtrack():
+            cell, opts = find_best_empty()
+            if cell is None:
+                return True  # no empty cells left -- solved
+            if not opts:
+                return False  # dead end -- this cell has no legal digit
+            r, c = cell
+            for v in opts:
+                board[r][c] = v
+                if backtrack():
+                    return True
+                board[r][c] = 0
+            return False
+
+        return board if backtrack() else None
+
     def find_conflicts(self):
         """Return the set of (row, col) cells whose value duplicates
         another cell's value within the same row, column, or 3x3 box.
-        Zeros (empty cells) are ignored. An empty result together with
-        every cell filled means the puzzle is solved correctly."""
+        Zeros (empty cells) are ignored. Used only as a fallback by
+        check_solution() for the unlikely case solve_sudoku() couldn't
+        find this puzzle's actual solution -- normally the direct
+        cell-by-cell comparison against self.solution is used
+        instead, since a conflict-free grid can still disagree with
+        the puzzle's actual (unique) solution."""
         conflicts = set()
         grid = self.user_grid
 
@@ -617,10 +695,14 @@ class SudokuPopup:
         return conflicts
 
     def check_solution(self):
-        """Check if the current solution is correct. Incorrect cells
-        (ones that duplicate another cell's value in their row,
-        column, or box) are highlighted in red rather than just
-        showing a generic error message."""
+        """Check the current grid strictly against this puzzle's own
+        solution: a cell is flagged in red if and only if it disagrees
+        with the solution at that position -- so each cell is judged
+        independently against the answer key, rather than only being
+        flagged when it happens to conflict with another cell in its
+        row/column/box. (A grid can be conflict-free by that older
+        definition and still be wrong, e.g. two cells swapped with a
+        third that only clashes with one of them.)"""
         for row in range(9):
             for col in range(9):
                 if self.user_grid[row][col] == 0:
@@ -631,11 +713,22 @@ class SudokuPopup:
         # computing and applying the current set.
         self.clear_error_highlights()
 
-        conflicts = self.find_conflicts()
+        if self.solution is not None:
+            incorrect = {
+                (r, c)
+                for r in range(9) for c in range(9)
+                if self.user_grid[r][c] != self.solution[r][c]
+            }
+        else:
+            # Extremely unlikely fallback: we couldn't derive a
+            # solution for this puzzle's clues, so fall back to
+            # flagging rule conflicts instead of leaving Check
+            # Solution unable to say anything at all.
+            incorrect = self.find_conflicts()
 
-        if conflicts:
-            self.error_cells = conflicts
-            for (r, c) in conflicts:
+        if incorrect:
+            self.error_cells = incorrect
+            for (r, c) in incorrect:
                 self.set_cell_color(r, c, self.error_color)
             messagebox.showerror(
                 "Error",
@@ -643,7 +736,7 @@ class SudokuPopup:
             )
             return
 
-        # No conflicts and every cell filled -- the puzzle is solved.
+        # Every cell filled and every cell matches the solution.
         try:
             here = os.path.dirname(os.path.abspath(__file__))
             congrats_path = os.path.join(here, 'CongratsScreen.py')
